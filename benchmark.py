@@ -8,7 +8,7 @@ from functools import reduce
 
 from plot import plot_files
 
-EXEC_ENVIRONMENT = "laptop"
+EXEC_ENVIRONMENT = None
 
 def main():
     parser = argparse.ArgumentParser()
