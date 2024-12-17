@@ -62,7 +62,7 @@ def list_flatten(l):
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--metrics", help="comma separated list of metrics to plot", required=True)
+    parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
     parser.add_argument('files', nargs='+', help="files to plot")
 
     args = parser.parse_args()
@@ -90,7 +90,7 @@ def plot_files(filepaths: list[str], metrics: list[str]) -> None:
 
     sanity_checks(file_measurements)
 
-    filenames = list(map(lambda f: os.path.splitext(f)[0], filepaths))
+    filenames = list(map(lambda f: os.path.splitext(os.path.basename(f))[0], filepaths))
     plot_filename = reduce(operator.add, filenames) + '.' + reduce(operator.add, metrics) + ".pdf"
 
     plot(plot_filename, 'iterations', 'norms (TODO)', file_measurements)
