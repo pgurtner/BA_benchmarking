@@ -17,6 +17,8 @@ def main():
     parser.add_argument('solver', help="which solver to use")
     parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
     parser.add_argument("--tasks", help="number of mpi threads", type=int, default=1)
+    parser.add_argument("--show", help="display plot automatically", action="store_true")
+    parser.add_argument("--inner-solver", help="output metrics from inner solver", action="store_true")
 
     args = parser.parse_args()
 
@@ -24,15 +26,17 @@ def main():
     metrics = args.metrics.split(',')
     solver = args.solver
     tasks = args.tasks
+    show = args.show
+    inner_solver = args.inner_solver
 
     if EXEC_ENVIRONMENT is None:
         raise ValueError("EXEC_ENVIRONMENT must be set")
     elif EXEC_ENVIRONMENT == "laptop":
-        exec_on_laptop(file, solver, metrics, tasks)
+        exec_on_laptop(file, solver, metrics, tasks, show, inner_solver)
     elif EXEC_ENVIRONMENT == "fritz":
-        exec_on_fritz(file, solver, metrics, tasks)
+        exec_on_fritz(file, solver, metrics, tasks, inner_solver)
 
-def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int) -> None:
+def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int, show: bool, inner_solver: bool) -> None:
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
@@ -54,9 +58,9 @@ def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int) -> No
 
     os.chdir(cwd)
 
-    plot_files([output_filepath], metrics)
+    plot_files([output_filepath], metrics, show, inner_solver)
 
-def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> None:
+def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int, inner_solver: bool) -> None:
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
@@ -85,7 +89,7 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     wait_until_slurm_job_finished(jobid)
 
     os.chdir(cwd)
-    plot_files([output_filepath], metrics)
+    plot_files([output_filepath], metrics, inner_solver)
 
 def is_slurm_job_finished(jobid: str) -> bool:
     result = subprocess.run(["squeue", "-j", jobid], stdout=subprocess.PIPE)

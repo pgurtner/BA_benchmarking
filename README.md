@@ -1,3 +1,3 @@
 # todo
 * measurement variable naming mess in plot.py
-* tests on Fritz
+* clean up code duplication between outer and inner metrics
