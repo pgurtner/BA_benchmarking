@@ -80,6 +80,7 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     pattern = r"Submitted batch job (\d+)"
     match = re.search(pattern, result)
     jobid = match.group(1)
+    print(f"job id: {jobid}", jobid)
 
     wait_until_slurm_job_finished(jobid)
 
@@ -97,6 +98,9 @@ def is_slurm_job_finished(jobid: str) -> bool:
         return True
 
     jobstatus = match.group(1)
+
+    if jobstatus == "PD":
+        print(f"job {jobid} still pending...")
 
     # if it is displayed, only(?) the status CG means it is finished
     return jobstatus == "CG"
