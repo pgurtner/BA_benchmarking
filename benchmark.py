@@ -13,7 +13,7 @@ EXEC_ENVIRONMENT = None
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("file", help="which fil e to run")
+    parser.add_argument("file", help="which file to run")
     parser.add_argument('solver', help="which solver to use")
     parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
     parser.add_argument("--tasks", help="number of mpi threads", type=int, default=1)
@@ -36,15 +36,16 @@ def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int) -> No
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
-    bin = os.path.basename(file)
 
     output_filename = solver + "." + reduce(operator.add, metrics)
     output_filepath = os.path.join(cwd, output_filename)
 
     jobscript_filepath = os.path.join(cwd, "job_laptop.sh")
 
+    # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
 
+    # typically EigenLU is used as the direct solver and it doesn't support multicore
     ntasks = 1
     if solver != "direct":
         ntasks = tasks
@@ -59,13 +60,13 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
-    bin = os.path.basename(file)
 
     output_filename = solver + "." + reduce(operator.add, metrics)
     output_filepath = os.path.join(cwd, output_filename)
 
     jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
 
+    # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
 
     ntasks = 1
@@ -73,6 +74,8 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
         ntasks = tasks
 
     result = subprocess.run(["sbatch", jobscript_filepath, file, solver, output_filepath, str(ntasks)], stdout=subprocess.PIPE)
+
+    # retrieve the job id to wait for the job's completion
     result = result.stdout.decode("utf-8")
     pattern = r"Submitted batch job (\d+)"
     match = re.search(pattern, result)
@@ -89,13 +92,16 @@ def is_slurm_job_finished(jobid: str) -> bool:
     pattern = r"\s*JOBID\s+PARTITION\s+NAME\s+USER\s+ST\s+TIME\s+TIME_LIMIT\s+NODES\s+CPUS\s+NODELIST\(REASON\)\s*\n\s+\S+\s+\S+\s+\S+\s+\S+\s+(\w+)"
     match = re.search(pattern, result)
 
+    # if the job is finished, it isn't displayed in the squeue output
     if match is None:
         return True
 
     jobstatus = match.group(1)
 
+    # if it is displayed, only(?) the status CG means it is finished
     return jobstatus == "CG"
 
+# typical waiting with exponentially increasing wait duration, capped at 10 mins
 def wait_until_slurm_job_finished(jobid: str) -> None:
     max_duration = 600
 

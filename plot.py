@@ -15,13 +15,19 @@ class PlotAxisType(Enum):
 
 @dataclass
 class BenchmarkFile:
+    # file basename without file extension
     name: str
+    # plain file content
     contents: str
 
 class Measurement:
+    # type of solver, currently one of {direct, mg, fmg, gmres, gmresp}
     solver: str
+    # outer Newton-Galerkin iteration of this measurement
     ng_iteration: int
+    # accumulated iteration of inner solver
     acc_iteration: int
+    # the actual metrics (usually norms) that make up the measurement
     metrics: list[tuple[str, str]]
 
     def __init__(self, solver, ng_iteration, acc_iteration, metrics):
@@ -30,11 +36,14 @@ class Measurement:
         self.acc_iteration = acc_iteration
         self.metrics = metrics
 
-    def restrict_metrics(self, metrics):
+    # restrict the stored metrics to the ones given in the argument
+    def restrict_metrics(self, metrics: list[str]):
         self.metrics = list(filter(lambda m: m[0] in metrics, self.metrics))
 
 class FileMeasurement:
+    # same as BenchmarkFile.name
     filename: str
+    # all measurements of file @filename
     measurements: list[Measurement]
 
     def __init__(self, filename, measurements):
@@ -84,7 +93,10 @@ def plot_files(filepaths: list[str], metrics: list[str]) -> None:
 
         file.close()
 
+    # extract all measurements from all files
     file_measurements: list[FileMeasurement] = list(map(lambda c: FileMeasurement(c.name, extract_measurements(c.contents)), contents))
+
+    # extract restrict measured metrics to the wanted ones
     for m in file_measurements:
         m.restrict_metrics(metrics)
 
@@ -93,7 +105,7 @@ def plot_files(filepaths: list[str], metrics: list[str]) -> None:
     filenames = list(map(lambda f: os.path.splitext(os.path.basename(f))[0], filepaths))
     plot_filename = reduce(operator.add, filenames) + '.' + reduce(operator.add, metrics) + ".pdf"
 
-    plot(plot_filename, 'iterations', 'norms (TODO)', file_measurements)
+    plot(plot_filename, 'accumulated inner solver iterations', 'norms', file_measurements)
 
 
 def extract_measurements(text: str) -> list[Measurement]:
@@ -105,8 +117,13 @@ def extract_measurements(text: str) -> list[Measurement]:
 
 
 def extract_measurements_from_block (block: str) -> Measurement:
+    # ng iteration and solver type, "<solver> iteration #<ng iteration>"
     outer_infos_regex = r'^\s*(\w+)\s*iteration\s*#(\d+)'
+
+    # accumulated iteration of inner solver, "[0] acc_iterations = <iteration>"
     acc_iterations_regex = r'\[0\]\s*acc_iterations\s*=\s*(\d+)'
+
+    # metrics of a measurement, "[0] <metric> = <value>"
     norm_regex = r'\[0\]\s*(\w+)\s*=\s*(\d+\.\d+(?:e[-+]\d+)?)'
 
     outer_infos = re.match(outer_infos_regex, block, re.M)
@@ -124,19 +141,17 @@ def extract_measurements_from_block (block: str) -> Measurement:
 
     return Measurement(solver, ng_iteration, int(acc_iterations.group(1)), norms)
 
-
-def get_single_measurement_type(measurements: list[list[tuple[str, str]]], measurement) -> list[float]:
-    return list_flatten(
-        list(map(lambda m: list(map(lambda m: float(m[1]), filter(lambda a: a[0] == measurement, m))), measurements)))
-
-
 def plot(dst_filepath: str, xlabel: str, ylabel: str, measurements: list[FileMeasurement],
          axis_dims: tuple[int, int, float, float] | None = None,
          axis_type: tuple[PlotAxisType, PlotAxisType] | None = None) -> None:
 
     assert len(measurements) > 0, "plot needs at least one measurement"
+
+    # todo: this roughly assumes that all measurements have the same amount of metrics
     has_multiple_graphs = len(measurements)*len(measurements[0].measurements[0].metrics) > 1
 
+    # y-axis is logarithmic by default
+    # todo: logarithmic scale should also work with fixed axis dimensions, maybe also use logarithmic y-axis as the default if axis_dims is set
     if axis_type is None:
         if axis_dims is None:
             axis_type = (PlotAxisType.LINEAR, PlotAxisType.LOGARITHMIC)
@@ -158,6 +173,10 @@ def plot(dst_filepath: str, xlabel: str, ylabel: str, measurements: list[FileMea
     if yaxis_type == PlotAxisType.LOGARITHMIC:
         plt.yscale('log')
 
+    # measurements can be seen as a list of tuples that contain the different metrics
+    # for plotting we need a list for each metric containing the values
+
+    # gets a list of measurements for each metric and adds the different measurements from m to the corresponding metric list
     def fold_measurements(l: list[Graph], m: Measurement) -> list[Graph]:
         for metric in m.metrics:
             for graph in l:
@@ -174,6 +193,7 @@ def plot(dst_filepath: str, xlabel: str, ylabel: str, measurements: list[FileMea
         graphs = reduce(fold_measurements, file_measurement.measurements[1:], graphs_start)
 
         for graph in graphs:
+            # split measurements into iteration list and value list
             xpoints = []
             ypoints = []
             for point in graph.points: #todo very imperative
