@@ -80,7 +80,7 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     pattern = r"Submitted batch job (\d+)"
     match = re.search(pattern, result)
     jobid = match.group(1)
-    print(f"job id: {jobid}", jobid)
+    print(f"job id: {jobid}")
 
     wait_until_slurm_job_finished(jobid)
 

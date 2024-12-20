@@ -13,4 +13,4 @@ unset SLURM_EXPORT_ENV
 
 make -j 72
 
-srun --ntasks-per-node="$4" "$1" "$2" --output="$3"
+srun --ntasks-per-node="$4" --output="$3" "$1" "$2"
