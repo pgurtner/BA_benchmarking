@@ -1,187 +1,263 @@
 import operator
-import os.path
 import re
 from dataclasses import dataclass
 from functools import reduce
 
 import matplotlib.pyplot as plt
 from enum import Enum
-import argparse, sys
+import argparse
 
 
 class PlotAxisType(Enum):
     LINEAR = 1
     LOGARITHMIC = 2
 
+
 @dataclass
-class BenchmarkFile:
-    # file basename without file extension
+class MetricDeclaration:
     name: str
-    # plain file content
-    contents: str
+    type: str
 
-class Measurement:
-    # type of solver, currently one of {direct, mg, fmg, gmres, gmresp}
-    solver: str
-    # outer Newton-Galerkin iteration of this measurement
-    ng_iteration: int
-    # accumulated iteration of inner solver
-    acc_iteration: int
-    # the actual metrics (usually norms) that make up the measurement
-    metrics: list[tuple[str, str]]
 
-    def __init__(self, solver, ng_iteration, acc_iteration, metrics):
-        self.solver = solver
-        self.ng_iteration = ng_iteration
-        self.acc_iteration = acc_iteration
-        self.metrics = metrics
+@dataclass
+class BenchmarkDeclaration:
+    name: str
+    metrics: list[MetricDeclaration]
 
-    # restrict the stored metrics to the ones given in the argument
-    def restrict_metrics(self, metrics: list[str]):
-        self.metrics = list(filter(lambda m: m[0] in metrics, self.metrics))
 
-    def __str__(self) -> str:
-        return f"{self.solver} #{self.ng_iteration} acc:{self.acc_iteration} : {self.metrics}"
+@dataclass
+class MetricsMeasurement:
+    benchmark: str
+    iteration: int
+    values: list[tuple[str, str]]
 
-    def __repr__(self) -> str:
-        return self.__str__()
-        #return "FileMeasurement()"
 
-class FileMeasurement:
-    # same as BenchmarkFile.name
-    filename: str
-    # all measurements of file @filename
-    measurements: list[Measurement]
+def restrict_measurement(m: MetricsMeasurement, restricted_metrics: list[str]):
+    return list(
+        filter(lambda value: value[0] in restricted_metrics,
+               m.values))
 
-    def __init__(self, filename, measurements):
-        self.filename = filename
-        self.measurements = measurements
-
-    def restrict_metrics(self, metrics):
-        for m in self.measurements:
-            m.restrict_metrics(metrics)
-
-    def __str__(self) -> str:
-        return f"{self.filename}: {self.measurements}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
-        #return "FileMeasurement()"
 
 @dataclass
 class Point2D:
     x: float
     y: float
 
+
 @dataclass
 class Graph:
-    metric: str
+    label: str
     points: list[Point2D]
 
-def list_flatten(l):
+
+class Benchmark:
+    decl: BenchmarkDeclaration
+    measurements: list[MetricsMeasurement]
+
+    def __init__(self, decl: BenchmarkDeclaration):
+        self.decl = decl
+        self.measurements = []
+
+    def add_measurement(self, measurement: MetricsMeasurement):
+        if not measurement.benchmark == self.decl.name:
+            raise ValueError(f"tried to add measurement from benchmark {measurement.benchmark} to {self.decl.name}")
+
+        measurement_includes_all_demanded_metrics = all(map(lambda benchmark_metric: any(
+            map(lambda measurement_value: benchmark_metric.name == measurement_value[0], measurement.values)),
+                                                            self.decl.metrics))
+
+        if not measurement_includes_all_demanded_metrics:
+            raise ValueError(f"measurement {measurement} misses a metric of {self.decl.metrics}")
+
+        restricted_metrics = restrict_measurement(measurement, list(
+            map(lambda metric_declaration: metric_declaration.name, self.decl.metrics)))
+
+        if len(restricted_metrics) == 0:
+            # no error here because having all demanded metrics is checked above
+            return
+
+        restricted_measurement = MetricsMeasurement(measurement.benchmark, measurement.iteration, restricted_metrics)
+
+        self.measurements.append(restricted_measurement)
+
+    def restrict_metrics(self, restricted_metrics: list[str]):
+        for m in self.measurements:
+            m.values = restrict_measurement(m, restricted_metrics)
+
+        self.measurements = list(filter(lambda m: len(m.values) > 0, self.measurements))
+
+    def to_graphs(self) -> list[Graph]:
+        if len(self.measurements) == 0:
+            return []
+
+        first_measurement = self.measurements[0]
+        # todo this could actually check the metric data type and cast value to int or float
+        graphs_start = [Graph(metric, [Point2D(first_measurement.iteration, float(value))]) for (metric, value) in
+                        first_measurement.values]
+        graphs = reduce(_fold_measurements, self.measurements[1:], graphs_start)
+
+        return graphs
+
+    def __str__(self) -> str:
+        return f"{self.decl}"
+
+    def __repr__(self) -> str:
+        return self.__str__()
+
+
+# measurements can be seen as a list of tuples that contain the different metrics
+# for plotting we need a list for each metric containing the values
+# gets a list of measurements for each metric and adds the different measurements from m to the corresponding metric list
+def _fold_measurements(l: list[Graph], m: MetricsMeasurement) -> list[Graph]:
+    for value in m.values:
+        for graph in l:
+            if graph.label == value[0]:
+                graph.points.append(Point2D(m.iteration, float(value[1])))
+                break
+
+    return l
+
+
+def _list_flatten(l):
     return [x for xs in l for x in xs]
 
-#todo: naming for different types of measurements is a complete mess
-def main():
-    parser = argparse.ArgumentParser()
 
-    parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
-    parser.add_argument('files', nargs='+', help="files to plot")
-    parser.add_argument("--show", help="display plot automatically", action="store_true")
-    parser.add_argument("--inner-solver", help="plot metrics from inner solver", action="store_true")
+def _convert_to_valid_filename(string: str) -> str:
+    filename = string.replace('/', '_').replace('\\', '_').replace(':', '_').replace('*', '_')
+    filename = filename.replace('?', '_').replace('<', '_').replace('>', '_').replace('|', '_')
+    filename = filename.replace(' ', '_')
 
-    args = parser.parse_args()
+    filename = filename.strip()
 
-    metrics = args.metrics.split(',')
-    files = args.files
-    show = args.show
-    inner_solver = args.inner_solver
+    if filename == '':
+        raise ValueError("filename only contains invalid characters or whitespace")
 
-    plot_files(files, metrics, show, inner_solver)
+    return filename
 
-def plot_files(filepaths: list[str], metrics: list[str], show: bool = False, inner_solver: bool = False) -> None:
-    contents: list[BenchmarkFile] = []
-    for filepath in filepaths:
+
+def plot(files: list[str], metrics: list[str], show: bool = False, wanted_benchmarks: list[str] | None = None):
+    contents: list[str] = []
+    for filepath in files:
         file = open(filepath, 'r')
         content: str = file.read()
 
-        (filename, _) = os.path.splitext(filepath)
-
-        contents.append(BenchmarkFile(filename, content))
+        contents.append(content)
 
         file.close()
 
-    if inner_solver:
-        plot_inner_metrics(contents, metrics, show)
+    # benchmark names are treated as global names
+    text = reduce(operator.add, contents)
+
+    benchmarks = _extract_benchmarks(text, metrics, wanted_benchmarks)
+
+    for b in benchmarks:
+        graphs = b.to_graphs()
+
+        output_filename = _plot_filename(b.decl.name, metrics)
+        _plot_graphs(output_filename, "iterations", "todo", graphs)
+
+    if show:
+        plt.show()  # todo very unclean
+
+
+def _extract_benchmarks(text: str, wanted_metrics: list[str], wanted_benchmarks: list[str] | None) -> list[Benchmark]:
+    declarations = _extract_declarations(text)
+    measurements = _extract_measurements(text)
+
+    if wanted_benchmarks is not None:
+        declarations = filter(lambda decl: decl.name in wanted_benchmarks, declarations)
+
+    benchmarks = list(map(lambda benchmark_decl: Benchmark(benchmark_decl),
+                          declarations))
+    for m in measurements:
+        for b in benchmarks:
+            if m.benchmark == b.decl.name:
+                b.add_measurement(m)
+
+    for b in benchmarks:
+        b.restrict_metrics(wanted_metrics)
+
+    return list(benchmarks)
+
+
+def _extract_declarations(text: str) -> list[BenchmarkDeclaration]:
+    metric_pattern = r'\s*([^\s,]+(?:<\s*(?:int|float)\s*>)?)\s*'
+    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) #benchmark\[(.+)\]:' + metric_pattern + '((?:,' + metric_pattern + ')*)'
+
+    declarations = []
+
+    for decl in re.finditer(pattern, text):
+        solver = decl.group(1)
+        first_metric = _parse_metric_declaration(decl.group(2))
+
+        other_metrics = []
+        if decl.group(3) != '':
+            other_metrics = map(_parse_metric_declaration, decl.group(3).strip().strip(',').split(','))
+
+        benchmark_decl = BenchmarkDeclaration(solver, [first_metric] + list(other_metrics))
+
+        declarations.append(benchmark_decl)
+
+    return declarations
+
+
+def _parse_metric_declaration(text: str) -> MetricDeclaration:
+    type_parameter_pattern = r'\s*([^\s,]+)<\s*((?:int|float))\s*>\s*'
+    match = re.search(type_parameter_pattern, text)
+
+    if match is None:
+        return MetricDeclaration(text.strip(), 'float')
     else:
-        plot_outer_metrics(contents, metrics, show)
-
-def plot_outer_metrics(contents: list[BenchmarkFile], metrics: list[str], show: bool) -> None:
-    # extract all measurements from all files
-    file_measurements: list[FileMeasurement] = list(
-        map(lambda c: FileMeasurement(c.name, extract_measurements(c.contents)), contents))
-
-    # extract restrict measured metrics to the wanted ones
-    for m in file_measurements:
-        m.restrict_metrics(metrics)
-
-    sanity_checks(file_measurements)
-
-    filenames = list(map(lambda f: f.name, contents))
-    plot_filename = reduce(operator.add, filenames) + '.' + reduce(operator.add, metrics) + ".pdf"
-
-    plot(plot_filename, 'accumulated inner solver iterations', 'norms', file_measurements, show)
+        if match.group(2) == 'int' or match.group(2) == 'float':
+            return MetricDeclaration(match.group(1).strip(), match.group(2))
+        else:
+            raise ValueError(f"Unknown metric type parameter: {match.group(2)}")
 
 
-def extract_measurements(text: str) -> list[Measurement]:
-    block_regex = r'\[0\]\[INFO\s*\]-*\(\d+\.\d+ sec\) finished'
+def _extract_measurements(text: str) -> list[MetricsMeasurement]:
+    metric_pattern = r'\s*(?:[^\s,]+\s*=\s*(?:[^\s,]+))\s*'
 
-    measurement_blocks = re.split(block_regex, text, 0, re.M)[1:]
+    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) @\[(.+)\]:(\d+) (' + metric_pattern + ')((?:,' + metric_pattern + ')*)'
 
-    return list(map(extract_measurements_from_block, measurement_blocks))
+    measurements = []
+
+    for m in re.finditer(pattern, text):
+        solver = m.group(1)
+        iteration = m.group(2)
+        first_metric = _parse_metric_measurement(m.group(3))
+
+        other_metrics = []
+        if m.group(4) != '':
+            other_metrics = map(_parse_metric_measurement, m.group(4).strip().strip(',').split(','))
+
+        measurement = MetricsMeasurement(solver, iteration, [first_metric] + list(other_metrics))
+
+        measurements.append(measurement)
+
+    return measurements
 
 
-def extract_measurements_from_block (block: str) -> Measurement:
-    # ng iteration and solver type, "<solver> iteration #<ng iteration>"
-    outer_infos_regex = r'^\s*(\w+)\s*iteration\s*#(\d+)'
+def _parse_metric_measurement(text: str) -> tuple[str, str]:
+    metric_pattern = r'\s*([^\s,]+)\s*=\s*([^\s,]+)\s*'
 
-    # accumulated iteration of inner solver, "[0] acc_iterations = <iteration>"
-    acc_iterations_regex = r'\[0\]\s*acc_iterations\s*=\s*(\d+)'
+    match = re.match(metric_pattern, text)
+    if match is None:
+        raise ValueError(f"Metric measurement doesn't fit pattern {text}")
+    else:
+        return match.group(1), match.group(2)
 
-    # metrics of a measurement, "[0] <metric> = <value>"
-    norm_regex = r'\[0\]\s*(\S+)\s*=\s*(\d+\.\d+(?:e[-+]\d+)?)'
 
-    outer_infos = re.match(outer_infos_regex, block, re.M)
-    if outer_infos is None:
-        raise ValueError("couldn't find ng iteration and/or solver type in \n" + block)
+def _plot_graphs(dst_filepath: str, xlabel: str, ylabel: str, graphs: list[Graph],
+                 axis_dims: tuple[int, int, float, float] | None = None,
+                 axis_type: tuple[PlotAxisType, PlotAxisType] | None = None):
+    if all(map(lambda g: len(g.points) == 0, graphs)):
+        return
 
-    solver = outer_infos.group(1)
-    ng_iteration = int(outer_infos.group(2))
-
-    acc_iterations = re.search(acc_iterations_regex, block)
-    if acc_iterations is None:
-        raise ValueError("acc_iterations is missing in text:\n" + block)
-
-    norms = re.findall(norm_regex, block)
-
-    return Measurement(solver, ng_iteration, int(acc_iterations.group(1)), norms)
-
-def plot(dst_filepath: str, xlabel: str, ylabel: str, measurements: list[FileMeasurement], show: bool,
-         axis_dims: tuple[int, int, float, float] | None = None,
-         axis_type: tuple[PlotAxisType, PlotAxisType] | None = None) -> None:
-
-    assert len(measurements) > 0, "plot needs at least one measurement"
-
-    # todo: this roughly assumes that all measurements have the same amount of metrics
-    has_multiple_graphs = len(measurements)*len(measurements[0].measurements[0].metrics) > 1
+    has_multiple_graphs = len(graphs) > 1
 
     # y-axis is logarithmic by default
-    # todo: logarithmic scale should also work with fixed axis dimensions, maybe also use logarithmic y-axis as the default if axis_dims is set
     if axis_type is None:
-        if axis_dims is None:
-            axis_type = (PlotAxisType.LINEAR, PlotAxisType.LOGARITHMIC)
-        else:
-            axis_type = (PlotAxisType.LINEAR, PlotAxisType.LINEAR)
+        axis_type = (PlotAxisType.LINEAR, PlotAxisType.LOGARITHMIC)
 
     plt.figure()
 
@@ -200,122 +276,50 @@ def plot(dst_filepath: str, xlabel: str, ylabel: str, measurements: list[FileMea
 
     colors = iter(('b', 'g', 'r', 'c', 'm', 'y', 'k'))
 
-    for file_measurement in measurements:
-        a = file_measurement.measurements[0]
-        graphs_start = [Graph(metric, [Point2D(a.acc_iteration, float(value))]) for (metric, value) in a.metrics]
-        graphs = reduce(fold_measurements, file_measurement.measurements[1:], graphs_start)
+    for graph in graphs:
+        xpoints = []
+        ypoints = []
+        for point in graph.points:  # todo very imperative
+            xpoints.append(point.x)
+            ypoints.append(point.y)
 
-        for graph in graphs:
-            # split measurements into iteration list and value list
-            xpoints = []
-            ypoints = []
-            for point in graph.points:  # todo very imperative
-                xpoints.append(point.x)
-                ypoints.append(point.y)
-
-            label = None
-            if has_multiple_graphs:
-                label = file_measurement.filename + '.' + graph.metric
-            plt.plot(xpoints, ypoints, marker='.', label=label, color=next(colors))
+        label = None
+        if has_multiple_graphs:
+            label = graph.label
+        plt.plot(xpoints, ypoints, marker='.', label=label, color=next(colors))
 
     plt.grid(visible=True)
     if has_multiple_graphs:
         plt.legend()
     plt.savefig(dst_filepath)
 
-    if show:
-        plt.show()
-
-def sanity_checks(measurements: list[FileMeasurement]) -> None:
-    for m in measurements:
-        assert len(m.measurements) > 0, "file needs at least one measurement"
-
-        for measurement in m.measurements:
-            assert measurement.ng_iteration >= 0, "ng iteration must be nonnegative"
-            assert measurement.acc_iteration >= 0, "acc iterations must be nonnegative"
-            assert len(measurement.metrics) > 0, "metrics must be non-empty"
+    # if show:
+    #     plt.show()
 
 
-        solver = m.measurements[0].solver
-        for mm in m.measurements: # todo very imperative
-            assert solver == mm.solver, "solver must stay the same in one benchmark file"
-
-# measurements can be seen as a list of tuples that contain the different metrics
-# for plotting we need a list for each metric containing the values
-# gets a list of measurements for each metric and adds the different measurements from m to the corresponding metric list
-def fold_measurements(l: list[Graph], m: Measurement) -> list[Graph]:
-    for metric in m.metrics:
-        for graph in l:
-            if graph.metric == metric[0]:
-                graph.points.append(Point2D(m.acc_iteration, float(metric[1])))
-                break
-
-    return l
-
-def plot_inner_metrics(contents: list[BenchmarkFile], metrics: list[str], show: bool) -> None:
-    # extract all measurements from all files
-    file_measurements: list[FileMeasurement] = list(
-        map(lambda c: FileMeasurement(c.name, extract_inner_measurements(c.contents)), contents))
-
-    # extract restrict measured metrics to the wanted ones
-    for m in file_measurements:
-        m.restrict_metrics(metrics)
-
-    sanity_checks(file_measurements)
-
-    filenames = list(map(lambda f: f.name, contents))
-    plot_filename = reduce(operator.add, filenames) + '.inner.' + reduce(operator.add, metrics) + ".pdf"
-
-    plot(plot_filename, 'inner solver iterations of one outer NG iteration', 'norms', file_measurements, show)
-
-def extract_inner_measurements(text: str) -> list[Measurement]:
-    outer_block_regex = r'\[0\]\[INFO\s*\]-*\(\d+\.\d+ sec\) finished'
-
-    outer_measurement_block = re.split(outer_block_regex, text, 0, re.M)[0]
-
-    inner_block_regex = r'\[0\]\[INFO\s*\]-*\(\d+\.\d+ sec\) inner solver: finished'
-    inner_measurement_blocks = re.split(inner_block_regex, outer_measurement_block, 0, re.M)[1:]
-
-    return list(map(extract_measurements_from_inner_block, inner_measurement_blocks))
+def _plot_filename(benchmark: str, metrics: list[str]) -> str:
+    return _convert_to_valid_filename(benchmark + '.' + reduce(operator.add,
+                                                               metrics) + '.pdf')
 
 
-def extract_measurements_from_inner_block(block: str) -> Measurement:
-    outer_info_regex = r'^\s*(\w+) iteration #(\d+)'
+if __name__ == "__main__":
+    plot(["mg.max_norm"], ["max_norm"])
 
-    # metrics of a measurement, "[0] <metric> = <value>"
-    norm_regex = r'\[0\]\s*(\S+)\s*=\s*(\d+\.\d+(?:e[-+]\d+)?)'
+    _parser = argparse.ArgumentParser()
 
-    outer_info = re.match(outer_info_regex, block, re.M)
-    if outer_info is None:
-        raise ValueError("couldn't find iteration of inner solver or inner solver type in \n" + block)
+    _parser.add_argument('files', nargs='+', help="files to plot")
+    _parser.add_argument("--show", help="display plot automatically", action="store_true")
+    _parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
+    _parser.add_argument("--benchmarks", help="comma separated list of benchmarks to plot")
 
-    solver = outer_info.group(1)
-    iteration = int(outer_info.group(2))
+    _args = _parser.parse_args()
 
-    norms = re.findall(norm_regex, block)
+    _metrics = _args.metrics.split(',')
+    _files = _args.files
+    _show = _args.show
+    _benchmarks = _args.benchmarks
 
-    return Measurement(solver, iteration, iteration, norms)
+    if _benchmarks is not None:
+        _benchmarks = _args.benchmarks.split(',')
 
-
-def plot_inner_metrics2(file_measurement: FileMeasurement, colors, has_multiple_graphs: bool) -> None:
-    m = file_measurement.measurements[0]
-    metric = m.metrics[0][0] # todo: currently only the first metric type is used
-
-    xpoints = []
-    ypoints = []
-
-    counter = 1
-    for a in m.metrics:
-        if a[0] == metric:
-            xpoints.append(counter)
-            ypoints.append(a[1])
-            counter += 1
-
-    label = None
-    if has_multiple_graphs:
-        label = file_measurement.filename + '.' + metric
-    plt.plot(xpoints, ypoints, marker='.', label=label, color=next(colors))
-
-
-if __name__ == '__main__':
-    main()
+    plot(_files, _benchmarks, _metrics, _show)
