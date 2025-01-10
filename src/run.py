@@ -1,46 +1,43 @@
-import argparse
-import operator
 import os
 import re
 import subprocess
 import time
-from functools import reduce
 
-from plot import plot
+from src.utils import GridConfig, build_run_filename
 
 EXEC_ENVIRONMENT = None
 
-def main():
-    parser = argparse.ArgumentParser()
+"""
+takes
+    binary which gets benchmarked
+    meshNx
+    meshNy
+    minLevel
+    maxLevel
+    solver
+    [--tasks] default=1
+    
+creates
+    runs/solver.meshNx.meshNy.minLevel.maxLevel.log
+"""
 
-    parser.add_argument("file", help="which file to run")
-    parser.add_argument('solver', help="which solver to use")
-    parser.add_argument("--metrics", help="comma separated list of metrics to plot", default="max_norm")
-    parser.add_argument("--tasks", help="number of mpi threads", type=int, default=1)
-    parser.add_argument("--show", help="display plot automatically", action="store_true")
 
-    args = parser.parse_args()
-
-    file = os.path.abspath(args.file)
-    metrics = args.metrics.split(',')
-    solver = args.solver
-    tasks = args.tasks
-    show = args.show
-
+def run(file: str, solver: str, tasks: int, grid_config: GridConfig):
     if EXEC_ENVIRONMENT is None:
         raise ValueError("EXEC_ENVIRONMENT must be set")
     elif EXEC_ENVIRONMENT == "laptop":
-        exec_on_laptop(file, solver, metrics, tasks, show)
+        _exec_on_laptop(file, solver, tasks, grid_config)
     elif EXEC_ENVIRONMENT == "fritz":
-        exec_on_fritz(file, solver, metrics, tasks)
+        _exec_on_fritz(file, solver, tasks, grid_config)
 
-def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int, show: bool) -> None:
+
+def _exec_on_laptop(file: str, solver: str, tasks: int,
+                    grid_config: GridConfig) -> None:
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
 
-    output_filename = solver + "." + reduce(operator.add, metrics)
-    output_filepath = os.path.join(cwd, output_filename)
+    output_filepath = os.path.join(cwd, "runs", build_run_filename(solver, grid_config))
 
     jobscript_filepath = os.path.join(cwd, "job_laptop.sh")
 
@@ -52,19 +49,22 @@ def exec_on_laptop(file: str, solver: str, metrics: list[str], tasks: int, show:
     if solver != "direct":
         ntasks = tasks
 
-    subprocess.call([jobscript_filepath, file, solver, output_filepath, str(ntasks)])
+    meshNx, meshNy, minLevel, maxLevel = grid_config.to_tuple()
+
+    subprocess.call(
+        [jobscript_filepath, file, str(meshNx), str(meshNy), str(minLevel), str(maxLevel), solver, output_filepath,
+         str(ntasks)])
 
     os.chdir(cwd)
 
-    plot([output_filepath], metrics, show)
 
-def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> None:
+def _exec_on_fritz(file: str, solver: str, tasks: int,
+                   grid_config: GridConfig) -> None:
     cwd = os.getcwd()
 
     bin_folder = os.path.dirname(file)
 
-    output_filename = solver + "." + reduce(operator.add, metrics)
-    output_filepath = os.path.join(cwd, output_filename)
+    output_filepath = os.path.join(cwd, "runs", build_run_filename(solver, grid_config))
 
     jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
 
@@ -75,7 +75,12 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     if solver != "direct":
         ntasks = tasks
 
-    result = subprocess.run(["sbatch", jobscript_filepath, file, solver, output_filepath, str(ntasks)], stdout=subprocess.PIPE)
+    meshNx, meshNy, minLevel, maxLevel = grid_config.to_tuple()
+
+    result = subprocess.run(
+        ["sbatch", jobscript_filepath, file, str(meshNx), str(meshNy), str(minLevel), str(maxLevel), solver,
+         output_filepath, str(ntasks)],
+        stdout=subprocess.PIPE)
 
     # retrieve the job id to wait for the job's completion
     result = result.stdout.decode("utf-8")
@@ -84,12 +89,12 @@ def exec_on_fritz(file: str, solver: str, metrics: list[str], tasks: int) -> Non
     jobid = match.group(1)
     print(f"job id: {jobid}")
 
-    wait_until_slurm_job_finished(jobid)
+    _wait_until_slurm_job_finished(jobid)
 
     os.chdir(cwd)
-    plot([output_filepath], metrics)
 
-def is_slurm_job_finished(jobid: str) -> bool:
+
+def _is_slurm_job_finished(jobid: str) -> bool:
     result = subprocess.run(["squeue", "-j", jobid], stdout=subprocess.PIPE)
     result = result.stdout.decode("utf-8")
     pattern = r"\s*JOBID\s+PARTITION\s+NAME\s+USER\s+ST\s+TIME\s+TIME_LIMIT\s+NODES\s+CPUS\s+NODELIST\(REASON\)\s*\n\s+\S+\s+\S+\s+\S+\s+\S+\s+(\w+)"
@@ -107,15 +112,13 @@ def is_slurm_job_finished(jobid: str) -> bool:
     # if it is displayed, only(?) the status CG means it is finished
     return jobstatus == "CG"
 
+
 # typical waiting with exponentially increasing wait duration, capped at 10 mins
-def wait_until_slurm_job_finished(jobid: str) -> None:
+def _wait_until_slurm_job_finished(jobid: str) -> None:
     max_duration = 600
 
     duration = 1
-    while not is_slurm_job_finished(jobid):
+    while not _is_slurm_job_finished(jobid):
         print(f"waiting {duration}s...")
         time.sleep(duration)
-        duration = min(max_duration, duration*2)
-
-if __name__ == '__main__':
-    main()
+        duration = min(max_duration, duration * 2)
