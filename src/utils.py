@@ -2,6 +2,8 @@ import os
 import re
 from functools import reduce
 
+RUN_LOG_FILE_NAME = "run.log"
+
 
 def list_flatten(l):
     return [x for xs in l for x in xs]
@@ -20,66 +22,47 @@ def convert_to_valid_filename(string: str) -> str:
     return filename
 
 
-class GridConfig:
-    meshNx: str
-    meshNy: str
-    minLevel: str
-    maxLevel: str
+def find_single_prm_file(target_dir: str) -> str:
+    parameter_files = []
 
-    def __init__(self, meshNx, meshNy, minLevel, maxLevel):
-        self.meshNx = meshNx
-        self.meshNy = meshNy
-        self.minLevel = minLevel
-        self.maxLevel = maxLevel
+    for f in os.scandir(target_dir):
+        if f.is_file() and os.path.splitext(f.name)[1] == ".prm":
+            parameter_files.append(f.name)
 
-    def to_tuple(self):
-        return (self.meshNx, self.meshNy, self.minLevel, self.maxLevel)
+    if len(parameter_files) < 1:
+        raise ValueError(f"No parameter files found in {target_dir}")
+    elif len(parameter_files) > 1:
+        raise ValueError(f"Multiple parameter files found in {target_dir}")
 
-    def __str__(self) -> str:
-        return f"{self.meshNx}x{self.meshNy}.{self.minLevel}-{self.maxLevel}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
+    return parameter_files[0]
 
 
-def build_run_filename(solver: str, grid_config: GridConfig) -> str:
-    return f"{solver}.{grid_config}.log"
+def parse_prm_file(param_file_path: str) -> dict[str, dict[str, str]]:
+    f = open(param_file_path, "r")
+    param_content = f.read()
+    f.close()
+
+    block_pattern = r"(.+)\s*{([\s\S]*?)}"
+    prm = {}
+
+    for block in re.finditer(block_pattern, param_content):
+        fields_pattern = r"\s*(\w+)\s*(.+?)\s*;"
+
+        block_dict = {}
+
+        for field in re.finditer(fields_pattern, block.group(2)):
+            block_dict[field.group(1)] = field.group(2)
+
+        prm[block.group(1)] = block_dict
+
+    return prm
 
 
-def extract_info_from_run_filename(run_filename: str) -> tuple[str, GridConfig]:
-    basename = os.path.basename(run_filename)
-    log_file_pattern = r"(.+)\.(.+)x(.+)\.(.+)-(.+)\.log"
-    match_result = re.match(log_file_pattern, basename)
-
-    if match_result is None:
-        raise ValueError(f"{basename} is not a valid run filename")
-
-    solver = match_result.group(1)
-    grid_config = GridConfig(match_result.group(2), match_result.group(3), match_result.group(4), match_result.group(5))
-
-    return solver, grid_config
-
-
-def build_std_plot_filename(solver: str, grid_config: GridConfig, benchmarks: list[str], metrics: list[str]) -> str:
+def build_std_plot_filename(benchmarks: list[str], metrics: list[str]) -> str:
     assert len(benchmarks) > 0
     assert len(metrics) > 0
 
     benchmarks = reduce(lambda s, a: f"{s},{a}", benchmarks)
     metrics = reduce(lambda s, a: f"{s},{a}", metrics)
 
-    return f"{solver}.{grid_config}.{benchmarks}.{metrics}.pdf"
-
-
-def extract_info_from_std_plot_filename(std_plot_filename: str) -> tuple[str, GridConfig, list[str], list[str]]:
-    basename = os.path.basename(std_plot_filename)
-    plot_file_pattern = r"(.+)\.(\d+)x(\d+)\.(\d+)-(\d+)\.((?:[^\s\.]+)(?:,[^\s\.]+)*)\.((?:[^\s\.]+)(?:,[^\s\.]+)*)\.pdf"
-    match_result = re.match(plot_file_pattern, basename)
-
-    if match_result is None:
-        raise ValueError(f"{basename} is not a valid std plot filename")
-
-    solver = match_result.group(1)
-    grid_config = GridConfig(match_result.group(2), match_result.group(3), match_result.group(4), match_result.group(5))
-    benchmarks = match_result.group(6).split(",")
-    metrics = match_result.group(7).split(",")
-    return solver, grid_config, benchmarks, metrics
+    return f"{benchmarks}.{metrics}.pdf"

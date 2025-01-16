@@ -1,10 +1,13 @@
 #!/bin/bash -l
 
-if [ "$#" -ne 8 ]; then
-    echo "Illegal number of parameters. Needs bin, meshNx, meshNy, minLevel, maxLevel, solver, output and mpi task amount."
+if [ "$#" -ne 4 ]; then
+    echo "Illegal number of parameters. Needs bin, .prm file, output and mpi task amount."
     exit 1
 fi
 
-make -j 4
+echo "compiling..."
 
-mpirun -N "$8" "$1" "$2" "$3" "$4" "$5" "$6" >"$7"
+make -j 4 >/dev/null
+
+echo "finished build, running benchmark..."
+mpirun -N "$4" "$1" "$2" >"$3"

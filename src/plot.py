@@ -92,7 +92,7 @@ class Plot:
         axes.grid(visible=True)
 
         colors = iter(('b', 'g', 'r', 'c', 'm', 'y', 'k'))
-
+        markers = iter(('.', 's', 'p', 'P', '*', 'h', 'o', '^', '<', '>', '1', '2', '3', '4', '8', '+', 'x', 'X', 'D'))
         for graph in self.graphs:
             xpoints = []
             ypoints = []
@@ -104,7 +104,7 @@ class Plot:
             if len(self.graphs) > 1:
                 label = graph.label
 
-            axes.plot(xpoints, ypoints, marker='.', label=label, color=next(colors))
+            axes.plot(xpoints, ypoints, marker=next(markers), label=label, color=next(colors))
 
         if len(self.graphs) > 1:
             plt.legend()

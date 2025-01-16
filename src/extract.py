@@ -2,23 +2,26 @@ import os
 import re
 
 from src.Benchmark import Benchmark, BenchmarkDeclaration, MetricDeclaration, MetricsMeasurement
-from src.utils import extract_info_from_run_filename
+from src.utils import RUN_LOG_FILE_NAME
 
 
-def extract_benchmarks(filepath: str, wanted_metrics: list[str] | None = None,
-                       wanted_benchmarks: list[str] | None = None) -> list[Benchmark]:
-    file = open(filepath, 'r')
+def extract_benchmarks(target_dir: str, wanted_metrics: list[str],
+                       wanted_benchmarks: list[str]) -> list[Benchmark]:
+    run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
+    if not os.path.isfile(run_log_path):
+        raise ValueError(f"Run log file not found at {run_log_path}")
+
+    file = open(run_log_path, 'r')
     benchmark_log = file.read()
     file.close()
 
     declarations = _extract_declarations(benchmark_log)
     measurements = _extract_measurements(benchmark_log)
 
-    if wanted_benchmarks is not None:
-        declarations = filter(lambda decl: decl.name in wanted_benchmarks, declarations)
+    # if wanted_benchmarks is not None:
+    declarations = filter(lambda decl: decl.name in wanted_benchmarks, declarations)
 
-    solver, grid_config = extract_info_from_run_filename(os.path.basename(filepath))
-    benchmarks = list(map(lambda benchmark_decl: Benchmark(benchmark_decl, solver, grid_config),
+    benchmarks = list(map(lambda benchmark_decl: Benchmark(benchmark_decl),
                           declarations))
     for m in measurements:
         for b in benchmarks:
@@ -68,7 +71,7 @@ def _parse_metric_declaration(text: str) -> MetricDeclaration:
 def _extract_measurements(text: str) -> list[MetricsMeasurement]:
     metric_pattern = r'\s*(?:[^\s,]+\s*=\s*(?:[^\s,]+))\s*'
 
-    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) @\[(.+)\]:(\d+) (' + metric_pattern + ')((?:,' + metric_pattern + ')*)'
+    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) @\[(.+)\]:(\d+)\s+(' + metric_pattern + ')((?:,' + metric_pattern + ')*)'
 
     measurements = []
 

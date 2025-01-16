@@ -1,7 +1,6 @@
 benchmarks/**
-plots_comparison/**
-plots_single/**
-runs/**
+comparisons/**
+old_dirs
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

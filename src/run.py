@@ -3,83 +3,66 @@ import re
 import subprocess
 import time
 
-from src.utils import GridConfig, build_run_filename
-
-EXEC_ENVIRONMENT = None
-
-"""
-takes
-    binary which gets benchmarked
-    meshNx
-    meshNy
-    minLevel
-    maxLevel
-    solver
-    [--tasks] default=1
-    
-creates
-    runs/solver.meshNx.meshNy.minLevel.maxLevel.log
-"""
+from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME
 
 
-def run(file: str, solver: str, tasks: int, grid_config: GridConfig):
-    if EXEC_ENVIRONMENT is None:
-        raise ValueError("EXEC_ENVIRONMENT must be set")
-    elif EXEC_ENVIRONMENT == "laptop":
-        _exec_on_laptop(file, solver, tasks, grid_config)
-    elif EXEC_ENVIRONMENT == "fritz":
-        _exec_on_fritz(file, solver, tasks, grid_config)
+def run(target_dir: str, tasks: int):
+    param_file = find_single_prm_file(target_dir)
+    abs_param_file_path = os.path.join(target_dir, param_file)
+    env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
+
+    if env is None:
+        raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set")
+    elif env == "laptop":
+        _exec_on_laptop(target_dir, abs_param_file_path, tasks)
+    elif env == "fritz":
+        _exec_on_fritz(target_dir, abs_param_file_path, tasks)
 
 
-def _exec_on_laptop(file: str, solver: str, tasks: int,
-                    grid_config: GridConfig) -> None:
+def _extract_binary_path(param_file_path: str) -> str:
+    params = parse_prm_file(param_file_path)
+    if "BenchmarkMetaData" not in params:
+        raise ValueError(f"No benchmark metadata found in {param_file_path}, aborting run")
+
+    if "binary" not in params["BenchmarkMetaData"]:
+        raise ValueError(f"No binary path found in {param_file_path}, aborting run")
+
+    return params["BenchmarkMetaData"]["binary"]
+
+
+def _exec_on_laptop(target_dir: str, param_file_path: str, tasks: int) -> None:
     cwd = os.getcwd()
 
-    bin_folder = os.path.dirname(file)
-
-    output_filepath = os.path.join(cwd, "runs", build_run_filename(solver, grid_config))
-
+    binary_path = _extract_binary_path(param_file_path)
+    bin_folder = os.path.dirname(binary_path)
+    output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     jobscript_filepath = os.path.join(cwd, "job_laptop.sh")
 
     # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
 
-    # typically EigenLU is used as the direct solver and it doesn't support multicore
-    ntasks = 1
-    if solver != "direct":
-        ntasks = tasks
-
-    meshNx, meshNy, minLevel, maxLevel = grid_config.to_tuple()
-
     subprocess.call(
-        [jobscript_filepath, file, str(meshNx), str(meshNy), str(minLevel), str(maxLevel), solver, output_filepath,
-         str(ntasks)])
+        [jobscript_filepath, binary_path, param_file_path, output_filepath,
+         str(tasks)])
 
     os.chdir(cwd)
 
 
-def _exec_on_fritz(file: str, solver: str, tasks: int,
-                   grid_config: GridConfig) -> None:
+# todo untested
+def _exec_on_fritz(target_dir: str, param_file_path: str, tasks: int) -> None:
     cwd = os.getcwd()
 
-    bin_folder = os.path.dirname(file)
-
-    output_filepath = os.path.join(cwd, "runs", build_run_filename(solver, grid_config))
-
+    binary_path = _extract_binary_path(param_file_path)
+    bin_folder = os.path.dirname(param_file_path)
+    output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
 
     # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
 
-    ntasks = 1
-    if solver != "direct":
-        ntasks = tasks
-
-    meshNx, meshNy, minLevel, maxLevel = grid_config.to_tuple()
-
     result = subprocess.run(
-        ["sbatch", jobscript_filepath, file, str(meshNx), str(meshNy), str(minLevel), str(maxLevel), solver,
-         output_filepath, str(ntasks)],
+        ["sbatch", jobscript_filepath, binary_path, param_file_path,
+         output_filepath, str(tasks)],
         stdout=subprocess.PIPE)
 
     # retrieve the job id to wait for the job's completion
@@ -113,7 +96,7 @@ def _is_slurm_job_finished(jobid: str) -> bool:
     return jobstatus == "CG"
 
 
-# typical waiting with exponentially increasing wait duration, capped at 10 mins
+# typical waiting with exponentially increasing wait duration, capped at 10 min
 def _wait_until_slurm_job_finished(jobid: str) -> None:
     max_duration = 600
 

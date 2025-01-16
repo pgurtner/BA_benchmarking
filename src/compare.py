@@ -2,35 +2,31 @@ import os
 from functools import reduce
 
 from src.extract import extract_benchmarks
-from src.utils import list_flatten, extract_info_from_run_filename
+from src.utils import list_flatten
 from src.plot import Plot
 
 
-def compare_existing_logs(files: list[str], benchmarks: list[str], metrics: list[str], show: bool):
-    basenames = list(map(os.path.basename, files))
-    log_configs = map(extract_info_from_run_filename, basenames)
+def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool):
+    suites = map(lambda d: (os.path.basename(d), extract_benchmarks(d, metrics, benchmarks)), dirs)
+    suites = list(map(lambda s: (s[0], list_flatten(list(map(lambda benchmark: benchmark.to_graphs(), s[1])))), suites))
 
-    extracted_benchmarks = list_flatten(map(lambda f: extract_benchmarks(f, metrics, benchmarks), files))
-    graphs_per_benchmark = map(lambda b: b.to_graphs(), extracted_benchmarks)
-    config_graph_pairs = list(zip(log_configs, graphs_per_benchmark))
-
-    for log_config, graphs in config_graph_pairs:
-        solver, grid_config = log_config
+    for suite_name, graphs in suites:
         for graph in graphs:
-            graph.label = f"{solver}.{grid_config}." + graph.label
+            graph.label = f"{suite_name}." + graph.label
 
-    relabeled_graphs = map(lambda p: p[1], config_graph_pairs)
+    relabeled_graphs = map(lambda p: p[1], suites)
     graphs = list_flatten(relabeled_graphs)
 
-    base_file_names = map(lambda f: os.path.splitext(f)[0], basenames)
-    metrics_str = reduce(lambda s, b: f"{s},{b}",
+    suite_names = list(map(lambda d: os.path.basename(d), dirs))
+    benchmark_str = reduce(
+        lambda s, b: f"{s},{b}", benchmarks)
+    metrics_str = reduce(lambda s, m: f"{s},{m}",
                          metrics)
-    output_file_name = reduce(lambda s, f: f"{s}-vs-{f}", base_file_names) + '.' + reduce(
-        lambda s, m: f"{s},{m}", benchmarks) + '.' + metrics_str
+    output_file_name = reduce(lambda s, f: f"{s}-vs-{f}", suite_names) + '.' + benchmark_str + '.' + metrics_str
 
     plot = Plot(graphs, output_file_name, metrics_str)
 
-    output_filepath = os.path.join(os.getcwd(), "plots_comparison", output_file_name + '.pdf')
+    output_filepath = os.path.join(os.getcwd(), "comparisons", output_file_name + '.pdf')
 
     plot.save(output_filepath)
 

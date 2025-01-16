@@ -4,19 +4,18 @@ from dataclasses import dataclass
 from functools import reduce
 
 from src.plot import Graph, Point2D
-from src.utils import GridConfig
 
 
 class MetricDeclaration:
     name: str
     type: str
 
-    def __init__(self, name: str, type: str):
+    def __init__(self, name: str, metric_type: str):
         if '.' in name or ' ' in name or ',' in name:
             raise ValueError("metric names cannot contain dots, spaces and commas")
 
         self.name = name
-        self.type = type
+        self.type = metric_type
 
 
 @dataclass
@@ -39,16 +38,12 @@ class BenchmarkDeclaration:
 
 
 class Benchmark:
-    solver: str
-    grid_config: GridConfig
     active_metrics: list[MetricDeclaration]
 
     decl: BenchmarkDeclaration
     measurements: list[MetricsMeasurement]
 
-    def __init__(self, decl: BenchmarkDeclaration, solver: str, grid_config: GridConfig):
-        self.solver = solver
-        self.grid_config = grid_config
+    def __init__(self, decl: BenchmarkDeclaration):
         self.active_metrics = copy.deepcopy(decl.metrics)
 
         self.decl = decl
@@ -84,6 +79,10 @@ class Benchmark:
 
         self.measurements = list(filter(lambda m: len(m.values) > 0, self.measurements))
 
+        if len(self.measurements) == 0:
+            print(
+                f"Warning: removed all measurements of {self.decl.name} after restricting to metrics {restricted_metrics}")
+
     def to_graphs(self) -> list[Graph]:
         if len(self.measurements) == 0:
             return []
@@ -94,10 +93,13 @@ class Benchmark:
                         first_measurement.values]
         graphs = reduce(_fold_measurements, self.measurements[1:], graphs_start)
 
+        for g in graphs:
+            g.label = f"{self.decl.name}." + g.label
+
         return graphs
 
     def get_id(self) -> str:
-        return f"{self.solver}.{self.grid_config}.{self.decl.name}.{reduce(operator.add, self.active_metrics)}"
+        return f"{self.decl.name}.{reduce(operator.add, self.active_metrics)}"
 
     def __str__(self) -> str:
         return self.get_id()
