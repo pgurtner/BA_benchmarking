@@ -3,7 +3,7 @@ import operator
 from dataclasses import dataclass
 from functools import reduce
 
-from src.plot import Graph, Point2D
+from src.utils import Point2D, Graph
 
 
 class MetricDeclaration:

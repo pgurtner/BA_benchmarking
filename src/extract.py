@@ -5,8 +5,19 @@ from src.Benchmark import Benchmark, BenchmarkDeclaration, MetricDeclaration, Me
 from src.utils import RUN_LOG_FILE_NAME
 
 
-def extract_benchmarks(target_dir: str, wanted_metrics: list[str],
-                       wanted_benchmarks: list[str]) -> list[Benchmark]:
+def restrict_benchmarks(benchmarks: list[Benchmark], wanted_benchmarks: list[str] | None,
+                        wanted_metrics: list[str] | None) -> list[Benchmark]:
+    if wanted_benchmarks is not None:
+        benchmarks = list(filter(lambda b: b.decl.name in wanted_benchmarks, benchmarks))
+
+    if wanted_metrics is not None:
+        for b in benchmarks:
+            b.restrict_metrics(wanted_metrics)
+
+    return benchmarks
+
+
+def extract_benchmarks(target_dir: str) -> list[Benchmark]:
     run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     if not os.path.isfile(run_log_path):
         raise ValueError(f"Run log file not found at {run_log_path}")
@@ -18,9 +29,6 @@ def extract_benchmarks(target_dir: str, wanted_metrics: list[str],
     declarations = _extract_declarations(benchmark_log)
     measurements = _extract_measurements(benchmark_log)
 
-    # if wanted_benchmarks is not None:
-    declarations = filter(lambda decl: decl.name in wanted_benchmarks, declarations)
-
     benchmarks = list(map(lambda benchmark_decl: Benchmark(benchmark_decl),
                           declarations))
     for m in measurements:
@@ -28,8 +36,7 @@ def extract_benchmarks(target_dir: str, wanted_metrics: list[str],
             if m.benchmark == b.decl.name:
                 b.add_measurement(m)
 
-    for b in benchmarks:
-        b.restrict_metrics(wanted_metrics)
+    benchmarks = filter(lambda b: len(b.measurements) > 0, benchmarks)
 
     return list(benchmarks)
 

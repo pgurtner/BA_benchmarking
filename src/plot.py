@@ -1,5 +1,5 @@
 import operator
-from dataclasses import dataclass
+import os
 from functools import reduce
 
 import matplotlib.pyplot as plt
@@ -7,22 +7,13 @@ from enum import Enum
 
 from matplotlib.figure import Figure
 
+from src.extract import extract_benchmarks, restrict_benchmarks
+from src.utils import Graph, RUN_LOG_FILE_NAME, list_flatten, build_std_plot_filename
+
 
 class PlotAxisType(Enum):
     LINEAR = 'linear'
     LOGARITHMIC = 'log'
-
-
-@dataclass
-class Point2D:
-    x: float
-    y: float
-
-
-@dataclass
-class Graph:
-    label: str
-    points: list[Point2D]
 
 
 class Plot:
@@ -110,3 +101,37 @@ class Plot:
             plt.legend()
 
         return plot
+
+
+def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metrics: list[str] | None,
+             show: bool = False):
+    run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
+    if not os.path.isfile(run_log_path):
+        print(f"{target_dir} misses run log, first run the program before trying to plot its benchmarks")
+        return
+
+    benchmarks = extract_benchmarks(target_dir)
+    benchmarks = restrict_benchmarks(benchmarks, wanted_benchmarks, wanted_metrics)
+
+    ylabel = 'all'
+    if wanted_metrics is not None:
+        ylabel = reduce(lambda s, m: f"{s},{m}", wanted_metrics)
+
+    if wanted_benchmarks is None:
+        for b in benchmarks:
+            graphs = b.to_graphs()
+            output_filename = build_std_plot_filename([b.decl.name], wanted_metrics)
+            output_filepath = os.path.join(target_dir, 'matplots', output_filename)
+
+            plot = Plot(list(graphs), output_filename, ylabel)
+            plot.save(output_filepath)
+    else:
+        graph_blocks = map(lambda b: b.to_graphs(), benchmarks)
+        output_filename = build_std_plot_filename(wanted_benchmarks, wanted_metrics)
+        output_filepath = os.path.join(target_dir, 'matplots', output_filename)
+        graphs = list_flatten(graph_blocks)
+        plot = Plot(list(graphs), output_filename, ylabel)
+        plot.save(output_filepath)
+
+    # if show:
+    #     plot.show()

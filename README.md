@@ -1,8 +1,7 @@
 # todo
 
 ## priority
-* add option to plot all benchmarks
-* move plot functions out of main.py
+* improve option to plot all benchmarks?
 
 ## normal
 
@@ -11,7 +10,7 @@
 
 # documentation
 
-Create a benchmark suite in directory benchmarks, i.e. a directory with arbitrary name and a .prm file. Then see
+Create a benchmark suite with `python3 main.py init`. Then see
 `python3 main.py -h`
 For the run functionality you have to set BA_BENCHMARKING_UTILITIES_ENV to "laptop" or "fritz" respectively depending on
 the machine that'll run the benchmarks

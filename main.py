@@ -1,13 +1,11 @@
 import argparse
 import os
-from functools import reduce
 
 from src.compare import compare_existing_logs
-from src.extract import extract_benchmarks
 from src.init import prep_fresh_directory, init_suite
 from src.run import run
-from src.utils import build_std_plot_filename, list_flatten, RUN_LOG_FILE_NAME
-from src.plot import Plot
+from src.plot import std_plot
+
 
 def main():
     parser = argparse.ArgumentParser(prog='benchmarking-utilities')
@@ -73,20 +71,24 @@ def add_common_plot_args(parser):
     parser.add_argument("--for-each",
                         help="plot these benchmarks separately, equivalent to just calling plot individually; can't be used with --benchmarks")
     parser.add_argument("--benchmarks", help="which benchmarks to plot")
-    parser.add_argument("--metrics", help="which metrics to plot", required=True)
+    parser.add_argument("--metrics", help="which metrics to plot")
     parser.add_argument("--show", help="whether to show the plot", action="store_true")
 
 
 def exec_plot_command(args):
     target_dir = os.path.abspath(args.dir)
-    wanted_metrics = args.metrics.split(',')
+    wanted_metrics = None
+    if args.metrics is not None:
+        wanted_metrics = args.metrics.split(',')
     show = bool(args.show)
 
-    if args.for_each is not None and args.benchmarks is not None or args.for_each is None and args.benchmarks is None:
+    if args.for_each is not None and args.benchmarks is not None:
         print("exactly one of --for-each or --benchmarks should be specified")
         exit(1)
 
-    if args.for_each is not None:
+    if args.for_each is None and args.benchmarks is None:
+        std_plot(target_dir, None, wanted_metrics, show)
+    elif args.for_each is not None:
 
         benchmarks = args.for_each.split(',')
         for b in benchmarks:
@@ -96,39 +98,15 @@ def exec_plot_command(args):
         std_plot(target_dir, wanted_benchmarks, wanted_metrics, show)
 
 
-def std_plot(target_dir: str, wanted_benchmarks: list[str], wanted_metrics: list[str], show: bool = False):
-    # todo this doesnt belong in main
-
-    run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
-    if not os.path.isfile(run_log_path):
-        print(f"{target_dir} misses run log, first run the program before trying to plot its benchmarks")
-        return
-
-    benchmarks = extract_benchmarks(target_dir, wanted_metrics, wanted_benchmarks)
-    graphs = map(lambda b: b.to_graphs(), benchmarks)
-    graphs = list_flatten(graphs)
-
-    output_filename = build_std_plot_filename(wanted_benchmarks, wanted_metrics)
-    output_filepath = os.path.join(target_dir, 'matplots', output_filename)
-
-    plot = Plot(list(graphs), output_filename, reduce(lambda s, m: f"{s},{m}", wanted_metrics))
-
-    plot.save(output_filepath)
-
-    if show:
-        plot.show()
-
-
 if __name__ == "__main__":
     # @dataclass
     # class Config:
-    #     dir = './benchmarks/arbitrary_name'
+    #     dir = './benchmarks/mg_small_grid'
     #     metrics = 'r_l2'
     #     show = False
-    #     for_each = 'NG_mg,NG_inner_mg_0'
-    #     benchmarks = None
-
-
-    #exec_plot_command(Config())
+    #     for_each = None
+    #     benchmarks = 'NG_mg'
+    #
+    # exec_plot_command(Config())
 
     main()

@@ -1,8 +1,21 @@
 import os
 import re
+from dataclasses import dataclass
 from functools import reduce
 
 RUN_LOG_FILE_NAME = "run.log"
+
+
+@dataclass
+class Point2D:
+    x: float
+    y: float
+
+
+@dataclass
+class Graph:
+    label: str
+    points: list[Point2D]
 
 
 def list_flatten(l):
@@ -58,11 +71,13 @@ def parse_prm_file(param_file_path: str) -> dict[str, dict[str, str]]:
     return prm
 
 
-def build_std_plot_filename(benchmarks: list[str], metrics: list[str]) -> str:
+def build_std_plot_filename(benchmarks: list[str], metrics: list[str] | None) -> str:
     assert len(benchmarks) > 0
-    assert len(metrics) > 0
 
-    benchmarks = reduce(lambda s, a: f"{s},{a}", benchmarks)
-    metrics = reduce(lambda s, a: f"{s},{a}", metrics)
+    benchmarks_str = reduce(lambda s, a: f"{s},{a}", benchmarks)
 
-    return f"{benchmarks}.{metrics}.pdf"
+    metrics_str = 'all'
+    if metrics is not None:
+        metrics_str = reduce(lambda s, a: f"{s},{a}", metrics)
+
+    return f"{benchmarks_str}.{metrics_str}.pdf"

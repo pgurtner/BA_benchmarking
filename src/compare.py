@@ -1,13 +1,13 @@
 import os
 from functools import reduce
 
-from src.extract import extract_benchmarks
+from src.extract import extract_benchmarks, restrict_benchmarks
 from src.utils import list_flatten
 from src.plot import Plot
 
 
 def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool):
-    suites = map(lambda d: (os.path.basename(d), extract_benchmarks(d, metrics, benchmarks)), dirs)
+    suites = map(lambda d: (os.path.basename(d), restrict_benchmarks(extract_benchmarks(d), benchmarks, metrics)), dirs)
     suites = list(map(lambda s: (s[0], list_flatten(list(map(lambda benchmark: benchmark.to_graphs(), s[1])))), suites))
 
     for suite_name, graphs in suites:
