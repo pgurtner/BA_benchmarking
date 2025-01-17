@@ -53,7 +53,7 @@ def _exec_on_fritz(target_dir: str, param_file_path: str, tasks: int) -> None:
     cwd = os.getcwd()
 
     binary_path = _extract_binary_path(param_file_path)
-    bin_folder = os.path.dirname(param_file_path)
+    bin_folder = os.path.dirname(binary_path)
     output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
 
