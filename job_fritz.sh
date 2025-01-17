@@ -11,6 +11,10 @@ fi
 
 unset SLURM_EXPORT_ENV
 
+echo "compiling..."
+
 make -j 72
+
+echo "finished build, running benchmark..."
 
 srun --ntasks-per-node="$4" --output="$3" "$1" "$2"
