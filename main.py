@@ -5,6 +5,7 @@ from src.compare import compare_existing_logs
 from src.init import prep_fresh_directory, init_suite
 from src.run import run
 from src.plot import std_plot
+from src.utils import clean_directory
 
 
 def main():
@@ -36,6 +37,8 @@ def main():
         tasks = int(args.tasks)
 
         prep_fresh_directory(target_dir)
+        clean_directory(os.path.join(target_dir, 'matplots'))
+        clean_directory(os.path.join(target_dir, 'vtk'))
 
         run(target_dir, tasks)
 

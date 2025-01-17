@@ -81,3 +81,14 @@ def build_std_plot_filename(benchmarks: list[str], metrics: list[str] | None) ->
         metrics_str = reduce(lambda s, a: f"{s},{a}", metrics)
 
     return f"{benchmarks_str}.{metrics_str}.pdf"
+
+def clean_directory(directory: str) -> None:
+    for filename in os.listdir(directory):
+        file_path = os.path.join(directory, filename)
+        try:
+            if os.path.isfile(file_path):
+                os.unlink(file_path)
+            else:
+                print(f'Cleaning directory encountered unexpected file format of {filename} in directory {directory}')
+        except Exception as e:
+            print(f'Failed to delete {file_path}. Reason: {e}')
