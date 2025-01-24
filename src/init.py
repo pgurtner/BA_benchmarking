@@ -17,6 +17,7 @@ def init_default_prm_file(suiteName: str) -> str:
     else:
         raise ValueError(f"BA_BENCHMARKING_UTILITIES_ENV has invalid value {env}")
 
+    # todo this enforces Unix file paths
     return '''BenchmarkMetaData
 {{
     binary {ba_path}/hyteg-build/apps/nlDiffusion/nlDiffusionExample;
@@ -28,27 +29,34 @@ Parameters
     vtk_output {ba_plot_path}/benchmarks/{suiteName}/vtk;
 
     minLevel 2;
-    maxLevel 4;
-    meshNx 2;
-    meshNy 2;
-    meshFlavour criss;
+    maxLevel 5;
+    meshFile 3D/cube_6el.msh;
+    maxNGIterations 20;
 
     solver mg;
-    preSmoothSteps 3;
-    postSmoothSteps 3;
+    preSmoothSteps 2;
+    postSmoothSteps 1;
+    smoothStepsIncreaseOnCoarserGrids 0;
     cycleType v;
     mgMaxIter 30;
-    mgTolerance 1e-10;
+    mgDynamicMaxIter false;
+    mgTolerance 1e-13;
 
     smoother chebyshev;
     chebyshevOrder 5;
 
-    coarseGridSolver gmres;
-    gmresMaxIter 600;
-    gmresRestartLength 40;
+    coarseGridSolver cg;
+    cgMaxIter 256;
 
     restriction linear;
     prolongation linear;
+
+    logOuterBenchmarks true;
+    logOuterTests false;
+    logOuterMisc false;
+    logInnerBenchmarks true;
+    logInnerTests false;
+    logInnerMisc false;
 }}'''.format(suiteName=suiteName, ba_path=ba_path, ba_plot_path=ba_plot_path)
 
 
