@@ -39,13 +39,12 @@ def main():
 
     if args.command == 'run':
         target_dir = os.path.abspath(args.dir)
-        tasks = int(args.tasks)
 
         prep_fresh_directory(target_dir)
         clean_directory(os.path.join(target_dir, 'matplots'))
         clean_directory(os.path.join(target_dir, 'vtk'))
 
-        run(target_dir, tasks)
+        run(target_dir)
 
 
     elif args.command == 'plot':
@@ -53,8 +52,7 @@ def main():
 
     elif args.command == 'benchmark':
         target_dir = os.path.abspath(args.dir)
-        tasks = int(args.tasks)
-        run(target_dir, tasks)
+        run(target_dir)
 
         exec_plot_command(args)
 
@@ -78,7 +76,6 @@ def main():
 
 def add_run_args(parser):
     parser.add_argument("dir", help="which benchmark directory to run")
-    parser.add_argument("--tasks", help="number of mpi threads", type=int, default=1)
 
 
 def add_common_plot_args(parser):

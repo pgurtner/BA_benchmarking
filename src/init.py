@@ -21,11 +21,12 @@ def init_default_prm_file(suiteName: str) -> str:
     return '''BenchmarkMetaData
 {{
     binary {ba_path}/hyteg-build/apps/nlDiffusion/nlDiffusionExample;
+    tasks 6;
 }}
 
 Parameters
 {{
-    vtk true;
+    vtk false;
     vtk_output {ba_plot_path}/benchmarks/{suiteName}/vtk;
 
     minLevel 2;
@@ -34,22 +35,22 @@ Parameters
     maxNGIterations 20;
 
     solver mg;
-    preSmoothSteps 2;
-    postSmoothSteps 1;
-    smoothStepsIncreaseOnCoarserGrids 0;
-    cycleType v;
-    mgMaxIter 30;
-    mgDynamicMaxIter false;
-    mgTolerance 1e-13;
+        preSmoothSteps 2;
+        postSmoothSteps 1;
+        smoothStepsIncreaseOnCoarserGrids 0;
+        cycleType v;
+        mgMaxIter 30;
+        mgTolerance 1e-13;
 
-    smoother chebyshev;
-    chebyshevOrder 5;
-
-    coarseGridSolver cg;
-    cgMaxIter 256;
-
-    restriction linear;
-    prolongation linear;
+        smoother chebyshev;
+            chebyshevOrder 5;
+            chebyshevSpectralRadiusEstMaxIter 20;
+    
+        coarseGridSolver cg;
+            cgMaxIter 256;
+    
+        restriction linear;
+        prolongation linear;
 
     logOuterBenchmarks true;
     logOuterTests false;

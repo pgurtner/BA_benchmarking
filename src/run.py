@@ -6,7 +6,7 @@ import time
 from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME
 
 
-def run(target_dir: str, tasks: int):
+def run(target_dir: str):
     param_file = find_single_prm_file(target_dir)
     abs_param_file_path = os.path.join(target_dir, param_file)
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
@@ -14,12 +14,12 @@ def run(target_dir: str, tasks: int):
     if env is None:
         raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set")
     elif env == "laptop":
-        _exec_on_laptop(target_dir, abs_param_file_path, tasks)
+        _exec_on_laptop(target_dir, abs_param_file_path)
     elif env == "fritz":
-        _exec_on_fritz(target_dir, abs_param_file_path, tasks)
+        _exec_on_fritz(target_dir, abs_param_file_path)
 
 
-def _extract_binary_path(param_file_path: str) -> str:
+def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:
     params = parse_prm_file(param_file_path)
     if "BenchmarkMetaData" not in params:
         raise ValueError(f"No benchmark metadata found in {param_file_path}, aborting run")
@@ -27,13 +27,16 @@ def _extract_binary_path(param_file_path: str) -> str:
     if "binary" not in params["BenchmarkMetaData"]:
         raise ValueError(f"No binary path found in {param_file_path}, aborting run")
 
-    return params["BenchmarkMetaData"]["binary"]
+    if "tasks" not in params["BenchmarkMetaData"]:
+        raise ValueError(f"No tasks found in {param_file_path}, aborting run")
+
+    return params["BenchmarkMetaData"]["binary"], int(params["BenchmarkMetaData"]["tasks"])
 
 
-def _exec_on_laptop(target_dir: str, param_file_path: str, tasks: int) -> None:
+def _exec_on_laptop(target_dir: str, param_file_path: str) -> None:
     cwd = os.getcwd()
 
-    binary_path = _extract_binary_path(param_file_path)
+    binary_path, tasks = _extract_meta_parameters(param_file_path)
     bin_folder = os.path.dirname(binary_path)
     output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     jobscript_filepath = os.path.join(cwd, "job_laptop.sh")
@@ -48,11 +51,10 @@ def _exec_on_laptop(target_dir: str, param_file_path: str, tasks: int) -> None:
     os.chdir(cwd)
 
 
-# todo untested
-def _exec_on_fritz(target_dir: str, param_file_path: str, tasks: int) -> None:
+def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:
     cwd = os.getcwd()
 
-    binary_path = _extract_binary_path(param_file_path)
+    binary_path, tasks = _extract_meta_parameters(param_file_path)
     bin_folder = os.path.dirname(binary_path)
     output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
