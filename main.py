@@ -3,6 +3,7 @@ import os
 
 from src.compare import compare_existing_logs
 from src.init import prep_fresh_directory, init_suite
+from src.meshgen import calculate_3d_mesh_config
 from src.run import run
 from src.plot import std_plot
 from src.utils import clean_directory
@@ -29,6 +30,10 @@ def main():
     add_common_plot_args(compare_parser)
 
     subparsers.add_parser('init')
+
+    meshgen_parser = subparsers.add_parser('meshgen')
+    meshgen_parser.add_argument("total_tets", help="total number of tets", type=int)
+    meshgen_parser.add_argument("--tets-per-block", help="number of tets per block", type=int, default=4)
 
     args = parser.parse_args()
 
@@ -63,6 +68,12 @@ def main():
 
     elif args.command == 'init':
         init_suite()
+    elif args.command == 'meshgen':
+        total_tets = int(args.total_tets)
+        tets_per_block = int(args.tets_per_block)
+
+        config = calculate_3d_mesh_config(total_tets, tets_per_block)
+        print(config)
 
 
 def add_run_args(parser):
@@ -111,5 +122,8 @@ if __name__ == "__main__":
     #     benchmarks = 'NG_mg'
     #
     # exec_plot_command(Config())
+
+    # compare_existing_logs(['./benchmarks/fritz/newton_galerkin/3D/mg_dynamic_iterations',
+    #                        './benchmarks/fritz/newton_galerkin/3D/mg_dynamic_large'], ['NG_mg'], ['r_l2'], False)
 
     main()
