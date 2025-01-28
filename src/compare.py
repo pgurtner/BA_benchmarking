@@ -7,14 +7,16 @@ from src.plot import Plot
 
 
 def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool):
-    suites = map(lambda d: (os.path.basename(d), restrict_benchmarks(extract_benchmarks(d), benchmarks, metrics)), dirs)
+    extracted_benchmarks = map(lambda d: (d, extract_benchmarks(d)), dirs)
+    restricted_benchmarks = map(lambda b: (b[0], restrict_benchmarks(b[1], benchmarks, metrics)), extracted_benchmarks)
+    suites = map(lambda b: (os.path.basename(b[0]), b[1]), restricted_benchmarks)
     suites = list(map(lambda s: (s[0], list_flatten(list(map(lambda benchmark: benchmark.to_graphs(), s[1])))), suites))
 
     for suite_name, graphs in suites:
         for graph in graphs:
             graph.label = f"{suite_name}." + graph.label
 
-    relabeled_graphs = map(lambda p: p[1], suites)
+    relabeled_graphs = list(map(lambda p: p[1], suites))
     graphs = list_flatten(relabeled_graphs)
 
     suite_names = list(map(lambda d: os.path.basename(d), dirs))
@@ -26,7 +28,10 @@ def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[
 
     plot = Plot(graphs, output_file_name, metrics_str)
 
-    output_filepath = os.path.join(os.getcwd(), "comparisons", output_file_name + '.pdf')
+    output_dir = os.path.commonpath(dirs)
+    os.makedirs(os.path.join(output_dir, "comparisons"), exist_ok=True)
+
+    output_filepath = os.path.join(output_dir, "comparisons", output_file_name + '.pdf')
 
     plot.save(output_filepath)
 
