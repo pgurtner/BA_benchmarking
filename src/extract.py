@@ -43,7 +43,7 @@ def extract_benchmarks(target_dir: str) -> list[Benchmark]:
 
 def _extract_declarations(text: str) -> list[BenchmarkDeclaration]:
     metric_pattern = r'\s*([^\s,]+(?:<\s*(?:int|float)\s*>)?)\s*'
-    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) #benchmark\[(.+)\]:' + metric_pattern + '((?:,' + metric_pattern + ')*)'
+    pattern = r'\[\s*\d+\s*\]\[\s*INFO\s*\]-+\(\d+\.\d+ sec\) #benchmark\[(.+)\]:' + metric_pattern + '((?:,' + metric_pattern + ')*)'
 
     declarations = []
 
@@ -78,7 +78,7 @@ def _parse_metric_declaration(text: str) -> MetricDeclaration:
 def _extract_measurements(text: str) -> list[MetricsMeasurement]:
     metric_pattern = r'\s*(?:[^\s,]+\s*=\s*(?:[^\s,]+))\s*'
 
-    pattern = r'\[\d+\]\[INFO\s*\]-+\(\d+\.\d+ sec\) @\[(.+)\]:(\d+)\s+(' + metric_pattern + ')((?:,' + metric_pattern + ')*)'
+    pattern = r'\[\s*\d+\s*\]\[\s*INFO\s*\]-+\(\d+\.\d+ sec\) @\[(.+)\]:(\d+)\s+(' + metric_pattern + ')((?:,' + metric_pattern + ')*)'
 
     measurements = []
 
