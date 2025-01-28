@@ -97,6 +97,11 @@ class Plot:
 
             axes.plot(xpoints, ypoints, marker=next(markers), label=label, color=next(colors))
 
+        xticks = axes.get_xticks()
+        int_xticks = map(int, xticks)
+        positiv_int_xticks = filter(lambda t: t >= 0, int_xticks)
+        axes.set_xticks(list(positiv_int_xticks))
+
         if len(self.graphs) > 1:
             plt.legend()
 
