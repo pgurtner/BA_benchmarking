@@ -1,3 +1,4 @@
+import math
 import os
 import re
 import subprocess
@@ -52,12 +53,31 @@ def _exec_on_laptop(target_dir: str, param_file_path: str) -> None:
 
 
 def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:
+    fritz_cores_per_node = 72
     cwd = os.getcwd()
 
     binary_path, tasks = _extract_meta_parameters(param_file_path)
     bin_folder = os.path.dirname(binary_path)
     output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
-    jobscript_filepath = os.path.join(cwd, "job_fritz.sh")
+
+    jobscript_template_filepath = os.path.join(cwd, "job_fritz.template")
+    nodes = math.ceil(tasks / fritz_cores_per_node)
+    tasks_per_node = min(fritz_cores_per_node, tasks)
+
+    with open(jobscript_template_filepath) as f:
+        jobscript_template = f.read()
+
+    jobscript = jobscript_template.replace("__NODES__", str(nodes)).replace("__NTASKS_PER_NODE__",
+                                                                            str(tasks_per_node))
+    if nodes >= 65:
+        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "-p big")
+    else:
+        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "");
+
+    jobscript_filepath = os.path.join(target_dir, "job_fritz.sh")
+
+    with open(jobscript_filepath, 'w') as f:
+        f.write(jobscript)
 
     # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
