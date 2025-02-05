@@ -7,6 +7,7 @@ from src.meshgen import calculate_3d_mesh_config
 from src.run import run
 from src.plot import std_plot
 from src.utils import clean_directory
+from src.move import move_benchmark_files
 
 
 def main():
@@ -29,11 +30,17 @@ def main():
     compare_parser.add_argument("dirs", help="which benchmark directories to compare", type=str, nargs='+')
     add_common_plot_args(compare_parser)
 
-    subparsers.add_parser('init')
+    init_parser = subparsers.add_parser('init')
+    init_parser.add_argument("suite_name", help="name of the benchmark suite", type=str)
 
     meshgen_parser = subparsers.add_parser('meshgen')
     meshgen_parser.add_argument("total_tets", help="total number of tets", type=int)
-    meshgen_parser.add_argument("--tets-per-block", help="number of tets per block", type=int, default=4)
+    meshgen_parser.add_argument("tets_per_thread", help="number of tets per thread", type=int, default=1)
+    meshgen_parser.add_argument("--tets-per-block", help="number of tets per block", type=int, default=6)
+
+    move_parser = subparsers.add_parser("move")
+    move_parser.add_argument("from_loc", help="old benchmark file location")
+    move_parser.add_argument("to", help="new benchmark file location")
 
     args = parser.parse_args()
 
@@ -65,13 +72,20 @@ def main():
         compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show)
 
     elif args.command == 'init':
-        init_suite()
+        name = args.suite_name
+        init_suite(name)
     elif args.command == 'meshgen':
         total_tets = int(args.total_tets)
+        tets_per_thread = int(args.tets_per_thread)
         tets_per_block = int(args.tets_per_block)
 
-        config = calculate_3d_mesh_config(total_tets, tets_per_block)
+        config = calculate_3d_mesh_config(total_tets * tets_per_thread, tets_per_thread, tets_per_block)
         print(config)
+    elif args.command == 'move':
+        from_loc = os.path.abspath(args.from_loc)
+        to = os.path.abspath(args.to)
+
+        move_benchmark_files(from_loc, to)
 
 
 def add_run_args(parser):
