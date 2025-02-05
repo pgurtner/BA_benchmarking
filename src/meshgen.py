@@ -11,7 +11,7 @@ def calculate_3d_mesh_config(total_tets: int, tets_per_block: int) -> tuple[int,
     # using max_side_length = math.ceil(wanted_blocks ** (1 / 3)) doesn't work because math.ceil sometimes enforces side lengths greater than max_side_lengths
     for x in range(1, wanted_blocks + 1):
         yRest = math.ceil(wanted_blocks / x)
-        for y in range(x, yRest):
+        for y in range(x, yRest + 1):
             zRest = math.ceil(yRest / y)
             for z in range(y, zRest + 1):
                 n = x * y * z * tets_per_block
