@@ -1,8 +1,11 @@
 # todo
 
+* check if benchmark suite exists before creating files (probably via prep_dir)
+
 ## priority
+
 * improve option to plot all benchmarks?
-  * add option to plot all benchmarks in one file
+    * add option to plot all benchmarks in one file
 * put multiple benchmarks next to each other in a file
 
 `python3 main.py plot benchmarks/mg_small_grid --metrics=r_l2 `
@@ -12,9 +15,10 @@
 * prevent runtime errors when benchmark and metric lists are empty
 * fix --show (doesn't block currently, i.e. instantly closes)
 * use separate waiting times for job-is-admitted and job-is-running
-* "slurm_load_jobs error: Invalid job id specified" ist bei langer Wartezeit aufgetaucht
+* "slurm_load_jobs error: Invalid job id specified" occurred after long waiting times
 
 ## idea
+
 * add remote benchmark suites (that are executed i.e. on fritz)
 * add init profiles (i.e. one for ng 2d, ng 3d, etc)
 
@@ -42,7 +46,7 @@ e.g.
 `@[NG_mg]:1 max_norm = 1.0e-5, acc_iterations = 100`
 
 ## parameter files
-
+out of date
 ```
 BenchmarkMetaData{
     binary {ba_path}/hyteg-build/apps/nlDiffusion/nlDiffusionExample;
