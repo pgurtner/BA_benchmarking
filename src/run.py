@@ -9,15 +9,14 @@ from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME
 
 def run(target_dir: str):
     param_file = find_single_prm_file(target_dir)
-    abs_param_file_path = os.path.join(target_dir, param_file)
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
 
     if env is None:
         raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set")
     elif env == "laptop":
-        _exec_on_laptop(target_dir, abs_param_file_path)
+        _exec_on_laptop(target_dir, param_file)
     elif env == "fritz":
-        _exec_on_fritz(target_dir, abs_param_file_path)
+        _exec_on_fritz(target_dir, param_file)
 
 
 def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:

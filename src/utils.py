@@ -47,7 +47,7 @@ def find_single_prm_file(target_dir: str) -> str:
     elif len(parameter_files) > 1:
         raise ValueError(f"Multiple parameter files found in {target_dir}")
 
-    return parameter_files[0]
+    return os.path.join(target_dir, parameter_files[0])
 
 
 def parse_prm_file(param_file_path: str) -> dict[str, dict[str, str]]:
@@ -81,6 +81,7 @@ def build_std_plot_filename(benchmarks: list[str], metrics: list[str] | None) ->
         metrics_str = reduce(lambda s, a: f"{s},{a}", metrics)
 
     return f"{benchmarks_str}.{metrics_str}.pdf"
+
 
 def clean_directory(directory: str) -> None:
     for filename in os.listdir(directory):
