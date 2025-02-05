@@ -21,7 +21,7 @@ def init_default_prm_file(suiteName: str) -> str:
     return '''BenchmarkMetaData
 {{
     binary {ba_path}/hyteg-build/apps/nlDiffusion/nlDiffusionExample;
-    tasks 6;
+    tasks 1;
 }}
 
 Parameters
@@ -34,6 +34,8 @@ Parameters
     meshFile 3D/cube_6el.msh;
     maxNGIterations 20;
 
+    ngOperator symmetric;
+
     solver mg;
         preSmoothSteps 2;
         postSmoothSteps 1;
@@ -41,13 +43,14 @@ Parameters
         cycleType v;
         mgMaxIter 30;
         mgTolerance 1e-13;
+        initialGuessType random;
+        initialGuessValue 1.0;
 
         smoother chebyshev;
-            chebyshevOrder 5;
+            chebyshevOrder 2;
             chebyshevSpectralRadiusEstMaxIter 20;
     
-        coarseGridSolver cg;
-            cgMaxIter 256;
+        coarseGridSolver direct;
     
         restriction linear;
         prolongation linear;
@@ -61,7 +64,7 @@ Parameters
 }}'''.format(suiteName=suiteName, ba_path=ba_path, ba_plot_path=ba_plot_path)
 
 
-def init_suite():
+def init_suite(name: str):
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
 
     if env is None:
@@ -69,15 +72,14 @@ def init_suite():
     elif env != "laptop" and env != "fritz":
         raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set to 'laptop' or 'fritz'")
 
-    name = input("Enter suite name: ")
-
     if name == '':
-        print(f"invalid suite name: {name}")
-        return
+        raise ValueError(f"invalid suite name: {name}")
 
-    os.makedirs(os.path.join(os.getcwd(), 'benchmarks', name), exist_ok=True)
+    suite_path = os.path.join(os.getcwd(), name)
 
-    with open(os.path.join(os.getcwd(), 'benchmarks', name, 'Parameters.prm'), 'w') as f:
+    os.makedirs(suite_path, exist_ok=True)
+
+    with open(os.path.join(suite_path, 'Parameters.prm'), 'w') as f:
         f.write(init_default_prm_file(name))
 
-    prep_fresh_directory(os.path.join(os.getcwd(), 'benchmarks', name))
+    prep_fresh_directory(suite_path)
