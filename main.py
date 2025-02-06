@@ -1,5 +1,6 @@
 import argparse
 import os
+from pathlib import PurePath
 
 from src.compare import compare_existing_logs
 from src.init import prep_fresh_directory, init_suite
@@ -7,7 +8,7 @@ from src.meshgen import calculate_3d_mesh_config
 from src.run import run
 from src.plot import std_plot
 from src.utils import clean_directory
-from src.move import move_benchmark_files
+from src.move import move_benchmark_folders
 
 
 def main():
@@ -79,13 +80,18 @@ def main():
         tets_per_thread = int(args.tets_per_thread)
         tets_per_block = int(args.tets_per_block)
 
-        config = calculate_3d_mesh_config(total_tets * tets_per_thread, tets_per_thread, tets_per_block)
+        config = calculate_3d_mesh_config(total_tets * tets_per_thread, tets_per_block)
         print(config)
     elif args.command == 'move':
         from_loc = os.path.abspath(args.from_loc)
         to = os.path.abspath(args.to)
 
-        move_benchmark_files(from_loc, to)
+        assert os.path.isdir(from_loc)
+
+        p = PurePath(to)
+        assert not p.is_relative_to(from_loc), "can't move directories inside themselves"
+
+        move_benchmark_folders(from_loc, to)
 
 
 def add_run_args(parser):

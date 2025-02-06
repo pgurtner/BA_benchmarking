@@ -35,19 +35,25 @@ def convert_to_valid_filename(string: str) -> str:
     return filename
 
 
-def find_single_prm_file(target_dir: str) -> str:
+def find_prm_files(target_dir: str) -> list[str]:
     parameter_files = []
 
     for f in os.scandir(target_dir):
         if f.is_file() and os.path.splitext(f.name)[1] == ".prm":
-            parameter_files.append(f.name)
+            parameter_files.append(f.path)
+
+    return parameter_files
+
+
+def find_single_prm_file(target_dir: str) -> str:
+    parameter_files = find_prm_files(target_dir)
 
     if len(parameter_files) < 1:
         raise ValueError(f"No parameter files found in {target_dir}")
     elif len(parameter_files) > 1:
         raise ValueError(f"Multiple parameter files found in {target_dir}")
 
-    return os.path.join(target_dir, parameter_files[0])
+    return parameter_files[0]
 
 
 def parse_prm_file(param_file_path: str) -> dict[str, dict[str, str]]:

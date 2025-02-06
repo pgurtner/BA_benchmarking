@@ -1,23 +1,48 @@
 import os
 
-from src.utils import find_single_prm_file, parse_prm_file
+from src.utils import find_single_prm_file, parse_prm_file, find_prm_files
 
 
 # todo this does a lot of implicit error throwing, check it in the function itself and give proper error messages
 def move_benchmark_files(from_loc: str, to: str) -> None:
-    prm_path = find_single_prm_file(from_loc)
-    prm = parse_prm_file(prm_path)
+    prm_paths = find_prm_files(from_loc)
 
-    # todo generalise this, don't treat each field separately
-    vtkOutput = prm["Parameters"]["vtk_output"]
-    newVtkOutput = os.path.join(to, 'vtk')
+    for path in prm_paths:
+        prm = parse_prm_file(path)
 
-    with open(prm_path) as f:
-        prm_text = f.read()
+        # todo generalise this, don't treat each field separately
+        vtkOutput = prm["Parameters"]["vtk_output"]
+        newVtkOutput = os.path.join(to, 'vtk')
 
-    prm_text = prm_text.replace(vtkOutput, newVtkOutput)
+        with open(path) as f:
+            prm_text = f.read()
 
-    with open(prm_path, 'w') as f:
-        f.write(prm_text)
+        prm_text = prm_text.replace(vtkOutput, os.path.abspath(newVtkOutput))
+
+        with open(path, 'w') as f:
+            f.write(prm_text)
 
     os.rename(from_loc, to)
+
+# from_loc must be a directory
+# to must not be inside from_loc
+def move_benchmark_folders(from_loc: str, to: str) -> None:
+
+    is_benchmark_suite = len(find_prm_files(from_loc)) > 0
+
+    if is_benchmark_suite:
+        move_benchmark_files(from_loc, to)
+    else:
+        os.makedirs(to, exist_ok=True)
+
+        files = list(os.scandir(from_loc))
+        plain_files = filter(lambda f: f.is_file(), files)
+        for f in plain_files:
+            os.rename(f.path, os.path.join(to, f.name))
+
+        directories = filter(lambda f: f.is_dir(), files)
+        for d in directories:
+            move_benchmark_folders(d.path, os.path.join(to, d.name))
+
+        # from_loc should be empty now
+        os.rmdir(from_loc)
