@@ -27,12 +27,14 @@ def init_default_prm_file(suiteName: str) -> str:
 Parameters
 {{
     vtk false;
-    vtk_output {ba_plot_path}/benchmarks/{suiteName}/vtk;
+    vtk_output {ba_plot_path}/{suiteName}/vtk;
 
     minLevel 2;
     maxLevel 5;
     meshFile 3D/cube_6el.msh;
     maxNGIterations 20;
+    initialGuessType constant;
+    initialGuessValue 0;
 
     ngOperator symmetric;
 
@@ -42,9 +44,9 @@ Parameters
         smoothStepsIncreaseOnCoarserGrids 0;
         cycleType v;
         mgMaxIter 30;
-        mgTolerance 1e-13;
-        initialGuessType random;
-        initialGuessValue 1.0;
+        mgTolerance 1e-14;
+        mgInitialGuessType constant;
+        mgInitialGuessValue 0;
 
         smoother chebyshev;
             chebyshevOrder 2;
