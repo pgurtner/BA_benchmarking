@@ -107,9 +107,65 @@ class Plot:
 
         return plot
 
+    def create_plot_script(self, output_filepath: str) -> str:
+        add_graphs_template = """
+xpoints = {xpoints}
+ypoints = {ypoints}
+axes.plot(xpoints, ypoints{label}, marker=next(markers), color=next(colors))"""
 
+        add_graphs_snippet = ''
+        for graph in self.graphs:
+            xpoints = []
+            ypoints = []
+            for point in graph.points:
+                xpoints.append(point.x)
+                ypoints.append(point.y)
+
+            label = ""
+            if len(self.graphs) > 1:
+                label = f', label="{graph.label}"'
+            add_graphs_snippet += add_graphs_template.format(xpoints=xpoints, ypoints=ypoints, label=label) + '\n'
+
+        template = """
+import matplotlib.pyplot as plt
+
+plot = plt.figure()
+
+axes = plot.add_subplot()
+
+axes.set_title("{title}")
+axes.set_xlabel("{xlabel}")
+axes.set_ylabel("{ylabel}")
+axes.set_xscale("{xscale}")
+axes.set_yscale("{yscale}")
+axes.grid(visible=True)
+
+colors = iter(('b', 'g', 'r', 'c', 'm', 'y', 'k'))
+markers = iter(('.', 's', 'p', 'P', '*', 'h', 'o', '^', '<', '>', '1', '2', '3', '4', '8', '+', 'x', 'X', 'D'))
+
+{add_graphs}
+
+# force xticks to be integers
+xticks = axes.get_xticks()
+int_xticks = map(int, xticks)
+positiv_int_xticks = filter(lambda t: t >= 0, int_xticks)
+axes.set_xticks(list(positiv_int_xticks))
+
+{plot_legend}
+
+plot.savefig("{output_filepath}")"""
+        plot_legend = ""
+        if len(self.graphs) > 1:
+            plot_legend = "plt.legend()"
+
+        return template.format(add_graphs=add_graphs_snippet, title=self.title, xlabel=self.xlabel, ylabel=self.ylabel,
+                               xscale=self.axis_types[0].value, yscale=self.axis_types[1].value,
+                               plot_legend=plot_legend, output_filepath=output_filepath)
+
+
+# todo output writing has code duplication
 def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metrics: list[str] | None,
-             show: bool = False):
+             show: bool = False, format: str = 'std'):
     run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
     if not os.path.isfile(run_log_path):
         print(f"{target_dir} misses run log, first run the program before trying to plot its benchmarks")
@@ -129,14 +185,27 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
             output_filepath = os.path.join(target_dir, 'matplots', output_filename)
 
             plot = Plot(list(graphs), output_filename, ylabel)
-            plot.save(output_filepath)
+
+            if format == 'std':
+                plot.save(output_filepath)
+            elif format == 'script':
+                script = plot.create_plot_script(output_filepath)
+                with open(output_filepath + '.py', 'w') as f:
+                    f.write(script)
+
     else:
         graph_blocks = map(lambda b: b.to_graphs(), benchmarks)
         output_filename = build_std_plot_filename(wanted_benchmarks, wanted_metrics)
         output_filepath = os.path.join(target_dir, 'matplots', output_filename)
         graphs = list_flatten(graph_blocks)
         plot = Plot(list(graphs), output_filename, ylabel)
-        plot.save(output_filepath)
+
+        if format == 'std':
+            plot.save(output_filepath)
+        elif format == 'script':
+            script = plot.create_plot_script(output_filepath)
+            with open(output_filepath + '.py', 'w') as f:
+                f.write(script)
 
     # if show:
     #     plot.show()

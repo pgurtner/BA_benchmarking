@@ -103,10 +103,16 @@ def add_common_plot_args(parser):
                         help="plot these benchmarks separately, equivalent to just calling plot individually; can't be used with --benchmarks")
     parser.add_argument("--benchmarks", help="which benchmarks to plot")
     parser.add_argument("--metrics", help="which metrics to plot")
+    parser.add_argument("--format", help="output format, std | script", type=str)
     parser.add_argument("--show", help="whether to show the plot", action="store_true")
 
 
 def exec_plot_command(args):
+    format = 'std'
+    if args.format is not None:
+        assert args.format in ['std', 'script']
+        format = args.format
+
     target_dir = os.path.abspath(args.dir)
     wanted_metrics = None
     if args.metrics is not None:
@@ -118,15 +124,15 @@ def exec_plot_command(args):
         exit(1)
 
     if args.for_each is None and args.benchmarks is None:
-        std_plot(target_dir, None, wanted_metrics, show)
+        std_plot(target_dir, None, wanted_metrics, show, format)
     elif args.for_each is not None:
 
         benchmarks = args.for_each.split(',')
         for b in benchmarks:
-            std_plot(target_dir, [b], wanted_metrics, show)
+            std_plot(target_dir, [b], wanted_metrics, show, format)
     else:
         wanted_benchmarks = args.benchmarks.split(',')
-        std_plot(target_dir, wanted_benchmarks, wanted_metrics, show)
+        std_plot(target_dir, wanted_benchmarks, wanted_metrics, show, format)
 
 
 if __name__ == "__main__":
