@@ -1,5 +1,5 @@
 alias bm='python3 main.py benchmark'
-alias binit='python3 main.py init'
+alias binit='python3 main.py config --create'
 alias brun='python3 main.py run'
 alias bplot='python3 main.py plot'
 alias bcompare='python3 main.py compare'

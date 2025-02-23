@@ -3,7 +3,7 @@ import os
 from pathlib import PurePath
 
 from src.compare import compare_existing_logs
-from src.init import prep_fresh_directory, init_suite
+from src.config import prep_fresh_directory, create_config, set_configs
 from src.meshgen import calculate_3d_mesh_config
 from src.run import run
 from src.plot import std_plot
@@ -31,8 +31,11 @@ def main():
     compare_parser.add_argument("dirs", help="which benchmark directories to compare", type=str, nargs='+')
     add_common_plot_args(compare_parser)
 
-    init_parser = subparsers.add_parser('init')
-    init_parser.add_argument("suite_name", help="name of the benchmark suite", type=str)
+    config_parser = subparsers.add_parser('config')
+    config_parser.add_argument("suite_name", help="name of the benchmark suite", type=str)
+    config_parser.add_argument("--create", action='store_true')
+    config_parser.add_argument("--assignments", nargs='*',
+                               help="<Block>.<field> = <value>, default value is used if not set")
 
     meshgen_parser = subparsers.add_parser('meshgen')
     meshgen_parser.add_argument("total_tets", help="total number of tets", type=int)
@@ -72,9 +75,18 @@ def main():
 
         compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show)
 
-    elif args.command == 'init':
+    elif args.command == 'config':
         name = args.suite_name
-        init_suite(name)
+        create = bool(args.create)
+        assignments = []
+        if args.assignments is not None:
+            assignments = args.assignments
+
+        if create:
+            create_config(name, assignments)
+        else:
+            set_configs(name, assignments)
+
     elif args.command == 'meshgen':
         total_tets = int(args.total_tets)
         tets_per_thread = int(args.tets_per_thread)
