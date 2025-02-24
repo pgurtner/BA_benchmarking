@@ -8,7 +8,7 @@ from enum import Enum
 from matplotlib.figure import Figure
 
 from src.extract import extract_benchmarks, restrict_benchmarks
-from src.utils import Graph, RUN_LOG_FILE_NAME, list_flatten, build_std_plot_filename
+from src.utils import Graph, RUN_LOG_FILE_NAME, list_flatten, build_std_plot_filename, BenchmarkIterator
 
 
 class PlotAxisType(Enum):
@@ -166,24 +166,41 @@ plot.savefig("{output_filepath}")"""
 # todo output writing has code duplication
 def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metrics: list[str] | None,
              show: bool = False, format: str = 'std'):
-    run_log_path = os.path.join(target_dir, RUN_LOG_FILE_NAME)
-    if not os.path.isfile(run_log_path):
-        print(f"{target_dir} misses run log, first run the program before trying to plot its benchmarks")
-        return
+    benchmark_iter = BenchmarkIterator(target_dir)
 
-    benchmarks = extract_benchmarks(target_dir)
-    benchmarks = restrict_benchmarks(benchmarks, wanted_benchmarks, wanted_metrics)
+    for benchmark_dir in benchmark_iter:
+        run_log_path = os.path.join(benchmark_dir, RUN_LOG_FILE_NAME)
+        if not os.path.isfile(run_log_path):
+            print(f"{benchmark_dir} misses run log, first run the program before trying to plot its benchmarks")
+            return
 
-    ylabel = 'all'
-    if wanted_metrics is not None:
-        ylabel = reduce(lambda s, m: f"{s},{m}", wanted_metrics)
+        benchmarks = extract_benchmarks(benchmark_dir)
+        benchmarks = restrict_benchmarks(benchmarks, wanted_benchmarks, wanted_metrics)
 
-    if wanted_benchmarks is None:
-        for b in benchmarks:
-            graphs = b.to_graphs()
-            output_filename = build_std_plot_filename([b.decl.name], wanted_metrics)
-            output_filepath = os.path.join(target_dir, 'matplots', output_filename)
+        ylabel = 'all'
+        if wanted_metrics is not None:
+            ylabel = reduce(lambda s, m: f"{s},{m}", wanted_metrics)
 
+        if wanted_benchmarks is None:
+            for b in benchmarks:
+                graphs = b.to_graphs()
+                output_filename = build_std_plot_filename([b.decl.name], wanted_metrics)
+                output_filepath = os.path.join(benchmark_dir, 'matplots', output_filename)
+
+                plot = Plot(list(graphs), output_filename, ylabel)
+
+                if format == 'std':
+                    plot.save(output_filepath)
+                elif format == 'script':
+                    script = plot.create_plot_script(output_filepath)
+                    with open(output_filepath + '.py', 'w') as f:
+                        f.write(script)
+
+        else:
+            graph_blocks = map(lambda b: b.to_graphs(), benchmarks)
+            output_filename = build_std_plot_filename(wanted_benchmarks, wanted_metrics)
+            output_filepath = os.path.join(benchmark_dir, 'matplots', output_filename)
+            graphs = list_flatten(graph_blocks)
             plot = Plot(list(graphs), output_filename, ylabel)
 
             if format == 'std':
@@ -193,19 +210,5 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
                 with open(output_filepath + '.py', 'w') as f:
                     f.write(script)
 
-    else:
-        graph_blocks = map(lambda b: b.to_graphs(), benchmarks)
-        output_filename = build_std_plot_filename(wanted_benchmarks, wanted_metrics)
-        output_filepath = os.path.join(target_dir, 'matplots', output_filename)
-        graphs = list_flatten(graph_blocks)
-        plot = Plot(list(graphs), output_filename, ylabel)
-
-        if format == 'std':
-            plot.save(output_filepath)
-        elif format == 'script':
-            script = plot.create_plot_script(output_filepath)
-            with open(output_filepath + '.py', 'w') as f:
-                f.write(script)
-
-    # if show:
-    #     plot.show()
+        # if show:
+        #   plot.show
