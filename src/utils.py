@@ -66,9 +66,9 @@ def parse_prm_file(param_file_content: str) -> dict[str, dict[str, str]]:
         block_dict = {}
 
         for field in re.finditer(fields_pattern, block.group(2)):
-            block_dict[field.group(1)] = field.group(2)
+            block_dict[field.group(1).strip()] = field.group(2).strip()
 
-        prm[block.group(1)] = block_dict
+        prm[block.group(1).strip()] = block_dict
 
     return prm
 
@@ -122,7 +122,7 @@ def format_prm_file(prm_file_content: str) -> str:
     formatted_text = ""
 
     def add_block(block: str) -> str:
-        t = block + " {"
+        t = block + "\n{"
         for field, value in prm[block].items():
             t += f"\n\t{field} {value};"
         t += "\n}\n\n"
@@ -150,7 +150,7 @@ def format_prm_file(prm_file_content: str) -> str:
     formatted_text += add_block("BenchmarkMetaData")
     del prm["BenchmarkMetaData"]
 
-    formatted_text += "Parameters {\n"
+    formatted_text += "Parameters\n{\n"
     formatted_text += add_formatted_blocks("Parameters", parameter_blocks, 1)
     for remaining_field in prm["Parameters"]:
         formatted_text += f"\t{remaining_field} = {prm["Parameters"][remaining_field]};\n"
