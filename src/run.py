@@ -3,24 +3,117 @@ import os
 import re
 import subprocess
 import time
+from subprocess import Popen
 
-from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME
+from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME, BenchmarkIterator
+
+
+class BenchmarkJob:
+    tasks: int
+
+    def poll(self) -> bool:
+        return False
+
+    def wait(self) -> None:
+        return None
+
+
+class LaptopJob(BenchmarkJob):
+    subprocess: Popen
+
+    def __init__(self, tasks: int, subprocess: Popen):
+        self.tasks = tasks
+        self.subprocess = subprocess
+
+    def poll(self) -> bool:
+        return self.subprocess.poll() is not None
+
+    def wait(self) -> None:
+        self.subprocess.wait()
+
+        return None
+
+
+class FritzJob(BenchmarkJob):
+    subprocess: Popen
+
+    # todo
 
 
 def run(target_dir: str):
-    param_file = find_single_prm_file(target_dir)
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
 
     if env is None:
         raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set")
     elif env == "laptop":
-        _exec_on_laptop(target_dir, param_file)
+        exec_benchmark = _exec_on_laptop
     elif env == "fritz":
-        _exec_on_fritz(target_dir, param_file)
+        # exec_benchmark = _exec_on_fritz
+        raise ValueError(
+            "running on fritz still has to implement parallel jobs: handling slurm, jobscript copying (running parallel jobs might cause problems if copied job files clash)")
+    else:
+        raise ValueError("invalid BA_BENCHMARKING_UTILITIES_ENV value " + env)
+
+    benchmark_iter = BenchmarkIterator(target_dir)
+
+    active_jobs: list[BenchmarkJob] = []
+    built_folders = []
+
+    for b in benchmark_iter:
+        prm_file = find_single_prm_file(b)
+
+        binary_path, tasks = _extract_meta_parameters(prm_file)
+        binary_folder = os.path.dirname(binary_path)
+
+        wait_duration = 1
+        while _waiting_update_and_check_is_busy(6, active_jobs, tasks, wait_duration):
+            print(wait_duration)
+            wait_duration = min(600, wait_duration * 2)
+
+        if binary_folder not in built_folders:
+            _build_project(binary_folder)
+            built_folders.append(binary_folder)
+
+        print(f"starting benchmark {b}")
+        job = exec_benchmark(b, prm_file)
+        active_jobs.append(job)
+
+    for j in active_jobs:
+        j.wait()
+
+def _waiting_update_and_check_is_busy(task_limit: int, active_jobs: list[BenchmarkJob], needed_tasks: int,
+                                           wait_duration: int) -> bool:
+    # update active jobs
+    for j in active_jobs:
+        if j.poll():
+            active_jobs.remove(j)
+
+    active_tasks = sum(map(lambda j: j.tasks, active_jobs))
+
+    if active_tasks + needed_tasks <= task_limit:
+        return False
+
+    time.sleep(wait_duration)
+    return True
+
+
+def _build_project(bin_folder: str) -> None:
+    cwd = os.getcwd()
+
+    os.chdir(bin_folder)
+
+    print(f"compiling {bin_folder}")
+    subprocess.call(['make'])
+
+    os.chdir(cwd)
 
 
 def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:
-    params = parse_prm_file(param_file_path)
+    with open(param_file_path) as param_file:
+        param_file_content = param_file.read()
+
+    params = parse_prm_file(param_file_content)
+
     if "BenchmarkMetaData" not in params:
         raise ValueError(f"No benchmark metadata found in {param_file_path}, aborting run")
 
@@ -33,7 +126,8 @@ def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:
     return params["BenchmarkMetaData"]["binary"], int(params["BenchmarkMetaData"]["tasks"])
 
 
-def _exec_on_laptop(target_dir: str, param_file_path: str) -> None:
+# todo is changing cwd even needed anymore?
+def _exec_on_laptop(target_dir: str, param_file_path: str) -> LaptopJob:
     cwd = os.getcwd()
 
     binary_path, tasks = _extract_meta_parameters(param_file_path)
@@ -44,11 +138,17 @@ def _exec_on_laptop(target_dir: str, param_file_path: str) -> None:
     # change to binary directory for the make call in the job script
     os.chdir(bin_folder)
 
-    subprocess.call(
-        [jobscript_filepath, binary_path, param_file_path, output_filepath,
-         str(tasks)])
+    # todo is this automatically running?
+    job = Popen([jobscript_filepath, binary_path, param_file_path, output_filepath,
+                 str(tasks)])
+
+    # subprocess.call(
+    #     [jobscript_filepath, binary_path, param_file_path, output_filepath,
+    #      str(tasks)])
 
     os.chdir(cwd)
+
+    return LaptopJob(tasks, job)
 
 
 def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:

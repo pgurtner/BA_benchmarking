@@ -5,9 +5,5 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-echo "compiling..."
-
-make -j 4 >/dev/null
-
-echo "finished build, running benchmark..."
+echo "running benchmark..."
 mpirun -N "$4" "$1" "$2" >"$3"
