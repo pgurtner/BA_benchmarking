@@ -3,11 +3,10 @@ import os
 from pathlib import PurePath
 
 from src.compare import compare_existing_logs
-from src.config import prep_fresh_directory, create_config, set_configs
+from src.config import create_config, set_configs
 from src.meshgen import calculate_3d_mesh_config
 from src.run import run
 from src.plot import std_plot
-from src.utils import clean_directory
 from src.move import move_benchmark_folders
 
 
@@ -50,10 +49,6 @@ def main():
 
     if args.command == 'run':
         target_dir = os.path.abspath(args.dir)
-
-        prep_fresh_directory(target_dir)
-        clean_directory(os.path.join(target_dir, 'matplots'))
-        clean_directory(os.path.join(target_dir, 'vtk'))
 
         run(target_dir)
 

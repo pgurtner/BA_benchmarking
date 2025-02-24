@@ -5,7 +5,8 @@ import subprocess
 import time
 from subprocess import Popen
 
-from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME, BenchmarkIterator
+from src.config import prep_fresh_directory
+from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME, BenchmarkIterator, clean_directory
 
 
 class BenchmarkJob:
@@ -15,6 +16,9 @@ class BenchmarkJob:
         return False
 
     def wait(self) -> None:
+        return None
+
+    def kill(self) -> None:
         return None
 
 
@@ -32,6 +36,9 @@ class LaptopJob(BenchmarkJob):
         self.subprocess.wait()
 
         return None
+
+    def kill(self) -> None:
+        self.subprocess.kill()
 
 
 class FritzJob(BenchmarkJob):
@@ -67,22 +74,32 @@ def run(target_dir: str):
 
         wait_duration = 1
         while _waiting_update_and_check_is_busy(6, active_jobs, tasks, wait_duration):
-            print(wait_duration)
             wait_duration = min(600, wait_duration * 2)
 
         if binary_folder not in built_folders:
             _build_project(binary_folder)
             built_folders.append(binary_folder)
 
+        prep_fresh_directory(b)
+        clean_directory(os.path.join(b, 'matplots'))
+        clean_directory(os.path.join(b, 'vtk'))
+
         print(f"starting benchmark {b}")
         job = exec_benchmark(b, prm_file)
         active_jobs.append(job)
 
     for j in active_jobs:
-        j.wait()
+        try:
+            j.wait()
+        except KeyboardInterrupt:
+            print("canceled benchmarks")
+
+    for j in active_jobs:
+        j.kill()
+
 
 def _waiting_update_and_check_is_busy(task_limit: int, active_jobs: list[BenchmarkJob], needed_tasks: int,
-                                           wait_duration: int) -> bool:
+                                      wait_duration: int) -> bool:
     # update active jobs
     for j in active_jobs:
         if j.poll():
