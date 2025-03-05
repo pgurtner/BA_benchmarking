@@ -1,6 +1,6 @@
 import os
 
-from src.utils import find_single_prm_file, parse_prm_file, find_prm_files
+from src.utils import parse_prm_file, find_prm_files
 
 
 # todo this does a lot of implicit error throwing, check it in the function itself and give proper error messages
@@ -8,7 +8,10 @@ def move_benchmark_files(from_loc: str, to: str) -> None:
     prm_paths = find_prm_files(from_loc)
 
     for path in prm_paths:
-        prm = parse_prm_file(path)
+        with open(path, "r") as f:
+            prm_content = f.read()
+
+        prm = parse_prm_file(prm_content)
 
         # todo generalise this, don't treat each field separately
         vtkOutput = prm["Parameters"]["vtk_output"]
@@ -24,10 +27,10 @@ def move_benchmark_files(from_loc: str, to: str) -> None:
 
     os.rename(from_loc, to)
 
+
 # from_loc must be a directory
 # to must not be inside from_loc
 def move_benchmark_folders(from_loc: str, to: str) -> None:
-
     is_benchmark_suite = len(find_prm_files(from_loc)) > 0
 
     if is_benchmark_suite:
