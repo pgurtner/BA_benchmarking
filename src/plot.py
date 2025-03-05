@@ -3,6 +3,8 @@ import os
 from functools import reduce
 
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
+from matplotlib.lines import Line2D
 from enum import Enum
 
 from matplotlib.figure import Figure
@@ -68,11 +70,6 @@ class Plot:
     def _create_plot(self) -> Figure:
         plot = plt.figure()
 
-        # origin_x = self.axis_dims[0]
-        # origin_y = self.axis_dims[2]
-        # width = self.axis_dims[1] - self.axis_dims[0]
-        # height = self.axis_dims[3] - self.axis_dims[2]
-        # axes = plot.add_axes(origin_x, origin_y, width, height)
         axes = plot.add_subplot()
 
         axes.set_title(self.title)
@@ -82,8 +79,12 @@ class Plot:
         axes.set_yscale(self.axis_types[1].value)
         axes.grid(visible=True)
 
-        colors = iter(('b', 'g', 'r', 'c', 'm', 'y', 'k'))
-        markers = iter(('.', 's', 'p', 'P', '*', 'h', 'o', '^', '<', '>', '1', '2', '3', '4', '8', '+', 'x', 'X', 'D'))
+        colors = iter(mcolors.TABLEAU_COLORS.keys())
+        markers = iter(
+            Line2D.markers.keys())
+        next(markers)
+        next(markers)  # skip plain pixel
+
         for graph in self.graphs:
             xpoints = []
             ypoints = []
@@ -128,6 +129,7 @@ axes.plot(xpoints, ypoints{label}, marker=next(markers), color=next(colors))"""
 
         template = """
 import matplotlib.pyplot as plt
+import matplotlib.colors as mcolors
 
 plot = plt.figure()
 
@@ -140,8 +142,10 @@ axes.set_xscale("{xscale}")
 axes.set_yscale("{yscale}")
 axes.grid(visible=True)
 
-colors = iter(('b', 'g', 'r', 'c', 'm', 'y', 'k'))
-markers = iter(('.', 's', 'p', 'P', '*', 'h', 'o', '^', '<', '>', '1', '2', '3', '4', '8', '+', 'x', 'X', 'D'))
+colors = iter(mcolors.TABLEAU_COLORS.keys())
+markers = iter(Line2D.markers.keys())
+next(markers)
+next(markers)  # skip plain pixel
 
 {add_graphs}
 
