@@ -47,7 +47,7 @@ class FritzJob(BenchmarkJob):
     # todo
 
 
-def run(target_dir: str):
+def run(target_dirs: list[str], multicore: bool):
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
 
     if env is None:
@@ -61,38 +61,47 @@ def run(target_dir: str):
     else:
         raise ValueError("invalid BA_BENCHMARKING_UTILITIES_ENV value " + env)
 
-    benchmark_iter = BenchmarkIterator(target_dir)
+    benchmark_iter = BenchmarkIterator(target_dirs)
 
     active_jobs: list[BenchmarkJob] = []
     built_folders = []
 
-    for b in benchmark_iter:
-        prm_file = find_single_prm_file(b)
+    try:
+        for b in benchmark_iter:
+            prm_file = find_single_prm_file(b)
 
-        binary_path, tasks = _extract_meta_parameters(prm_file)
-        binary_folder = os.path.dirname(binary_path)
+            binary_path, tasks = _extract_meta_parameters(prm_file)
+            binary_folder = os.path.dirname(binary_path)
 
-        wait_duration = 1
-        while _waiting_update_and_check_is_busy(6, active_jobs, tasks, wait_duration):
-            wait_duration = min(600, wait_duration * 2)
+            if multicore:
+                raise "multicore processing not implemented yet"
+                allowed_total_jobs = 6 # todo
+                wait_duration = 1
+                while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
+                    wait_duration = min(600, wait_duration * 2)
 
-        if binary_folder not in built_folders:
-            _build_project(binary_folder)
-            built_folders.append(binary_folder)
+            else:
+                for j in active_jobs:
+                    j.wait()
 
-        prep_fresh_directory(b)
-        clean_directory(os.path.join(b, 'matplots'))
-        clean_directory(os.path.join(b, 'vtk'))
 
-        print(f"starting benchmark {b}")
-        job = exec_benchmark(b, prm_file)
-        active_jobs.append(job)
+            if binary_folder not in built_folders:
+                _build_project(binary_folder)
+                built_folders.append(binary_folder)
 
-    for j in active_jobs:
-        try:
+            prep_fresh_directory(b)
+            clean_directory(os.path.join(b, 'matplots'))
+            clean_directory(os.path.join(b, 'vtk'))
+
+            print(f"starting benchmark {b}")
+            job = exec_benchmark(b, prm_file)
+            active_jobs.append(job)
+
+        for j in active_jobs:
             j.wait()
-        except KeyboardInterrupt:
-            print("canceled benchmarks")
+
+    except KeyboardInterrupt:
+        print("canceled benchmarks")
 
     for j in active_jobs:
         j.kill()

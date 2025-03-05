@@ -32,9 +32,10 @@ def main():
 
     config_parser = subparsers.add_parser('config')
     config_parser.add_argument("suite_name", help="name of the benchmark suite", type=str)
-    config_parser.add_argument("--create", action='store_true')
+    config_parser.add_argument("--create", action='store_true', help="create the config along with the benchmark suite directories, implies --set-defaults")
+    config_parser.add_argument("--set-defaults", action='store_true', help="sets the configs to the default config")
     config_parser.add_argument("--assignments", nargs='*',
-                               help="<Block>.<field> = <value>, default value is used if not set")
+                               help="<Block>.<field>=<value>, for non-default updates")
 
     meshgen_parser = subparsers.add_parser('meshgen')
     meshgen_parser.add_argument("total_tets", help="total number of tets", type=int)
@@ -48,17 +49,19 @@ def main():
     args = parser.parse_args()
 
     if args.command == 'run':
-        target_dir = os.path.abspath(args.dir)
+        target_dirs = list(map(os.path.abspath, args.dirs))
+        multicore = bool(args.m)
 
-        run(target_dir)
+        run(target_dirs, multicore)
 
 
     elif args.command == 'plot':
         exec_plot_command(args)
 
     elif args.command == 'benchmark':
-        target_dir = os.path.abspath(args.dir)
-        run(target_dir)
+        target_dirs = list(map(os.path.abspath, args.dirs))
+        multicore = bool(args.m)
+        run(target_dirs, multicore)
 
         exec_plot_command(args)
 
@@ -73,14 +76,16 @@ def main():
     elif args.command == 'config':
         name = args.suite_name
         create = bool(args.create)
+        set_defaults = bool(args.set_defaults)
         assignments = []
+    
         if args.assignments is not None:
             assignments = args.assignments
 
         if create:
             create_config(name, assignments)
         else:
-            set_configs(name, assignments)
+            set_configs(name, assignments, set_defaults)
 
     elif args.command == 'meshgen':
         total_tets = int(args.total_tets)
@@ -102,7 +107,8 @@ def main():
 
 
 def add_run_args(parser):
-    parser.add_argument("dir", help="which benchmark directory to run")
+    parser.add_argument("dirs", help="which benchmark directories to run", nargs='+')
+    parser.add_argument("-m", help="allow running jobs on multiple cores", action="store_true", default=False)
 
 
 def add_common_plot_args(parser):

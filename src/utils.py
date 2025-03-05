@@ -90,6 +90,7 @@ def format_prm_file(prm_file_content: str) -> str:
             "smoothStepsIncreaseOnCoarserGrids",
             "cycleType",
             "mgMaxIter",
+            "mgDynamicMaxIterStart",
             "mgTolerance",
             "mgInitialGuessType",
             "mgInitialGuessValue",
@@ -103,7 +104,7 @@ def format_prm_file(prm_file_content: str) -> str:
             "coarseGridSolver",
             [
                 "gmresMaxIter",
-                "gmresMaxRestartLength",
+                "gmresRestartLength",
                 "cgMaxIter"
             ],
             newline,
@@ -153,7 +154,7 @@ def format_prm_file(prm_file_content: str) -> str:
     formatted_text += "Parameters\n{\n"
     formatted_text += add_formatted_blocks("Parameters", parameter_blocks, 1)
     for remaining_field in prm["Parameters"]:
-        formatted_text += f"\t{remaining_field} = {prm["Parameters"][remaining_field]};\n"
+        formatted_text += f"\t{remaining_field} {prm["Parameters"][remaining_field]};\n"
     formatted_text += "}\n\n"
     del prm["Parameters"]
 
@@ -202,17 +203,22 @@ def benchmark_fold_iterator(directory_path: str, leaf_action, node_action):
 
 
 class BenchmarkIterator:
-    directory_path: str
+    directory_path: list[str]
     benchmark_paths: list[str]
     counter: int
 
-    def __init__(self, directory_path: str):
-        self.directory_path = directory_path
+    def __init__(self, directory_path: str | list[str]):
+        if isinstance(directory_path, str):
+            self.directory_path = [directory_path]
+        else:
+            self.directory_path = directory_path
+
         self.benchmark_paths = []
         self.counter = 0
 
     def __iter__(self):
-        benchmark_fold_iterator(self.directory_path, lambda d: self.benchmark_paths.append(d), lambda d: None)
+        for dir in self.directory_path:
+            benchmark_fold_iterator(dir, lambda d: self.benchmark_paths.append(d), lambda d: None)
 
         return self
 
