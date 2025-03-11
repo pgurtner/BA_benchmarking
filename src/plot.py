@@ -10,7 +10,8 @@ from enum import Enum
 from matplotlib.figure import Figure
 
 from src.extract import extract_benchmarks, restrict_benchmarks
-from src.utils import Graph, RUN_LOG_FILE_NAME, list_flatten, build_std_plot_filename, BenchmarkIterator
+from src.utils import Graph, list_flatten, build_std_plot_filename, BenchmarkIterator, find_single_prm_file, \
+    load_prm_file, build_run_log_filename
 
 
 class PlotAxisType(Enum):
@@ -61,11 +62,12 @@ class Plot:
 
         self._plt.show()
 
-    def save(self, filepath: str):
+    def save_and_close(self, filepath: str):
         if self._plt is None:
             self._plt = self._create_plot()
 
         self._plt.savefig(filepath)
+        plt.close(self._plt)
 
     def _create_plot(self) -> Figure:
         plot = plt.figure()
@@ -173,10 +175,18 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
     benchmark_iter = BenchmarkIterator(target_dir)
 
     for benchmark_dir in benchmark_iter:
-        run_log_path = os.path.join(benchmark_dir, RUN_LOG_FILE_NAME)
-        if not os.path.isfile(run_log_path):
-            print(f"{benchmark_dir} misses run log, first run the program before trying to plot its benchmarks")
-            return
+        prm = load_prm_file(benchmark_dir)
+        if "BenchmarkMetaData" not in prm or "repeat" not in prm["BenchmarkMetaData"]:
+            raise ValueError(f"config of {benchmark_dir} does not contain a repeat value")
+
+        repetitions_amount = int(prm["BenchmarkMetaData"]["repeat"])
+
+        for i in range(repetitions_amount):
+            run_log_path = os.path.join(benchmark_dir, build_run_log_filename(i))
+            if not os.path.isfile(run_log_path):
+                print(
+                    f"{benchmark_dir} misses run log index {i}, first run the program before trying to plot its benchmarks")
+                return
 
         benchmarks = extract_benchmarks(benchmark_dir)
         benchmarks = restrict_benchmarks(benchmarks, wanted_benchmarks, wanted_metrics)
@@ -194,7 +204,7 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
                 plot = Plot(list(graphs), output_filename, ylabel)
 
                 if format == 'std':
-                    plot.save(output_filepath)
+                    plot.save_and_close(output_filepath)
                 elif format == 'script':
                     script = plot.create_plot_script(output_filepath)
                     with open(output_filepath + '.py', 'w') as f:
@@ -208,7 +218,7 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
             plot = Plot(list(graphs), output_filename, ylabel)
 
             if format == 'std':
-                plot.save(output_filepath)
+                plot.save_and_close(output_filepath)
             elif format == 'script':
                 script = plot.create_plot_script(output_filepath)
                 with open(output_filepath + '.py', 'w') as f:

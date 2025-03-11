@@ -6,7 +6,8 @@ import time
 from subprocess import Popen
 
 from src.config import prep_fresh_directory
-from src.utils import parse_prm_file, find_single_prm_file, RUN_LOG_FILE_NAME, BenchmarkIterator, clean_directory
+from src.utils import parse_prm_file, find_single_prm_file, BenchmarkIterator, clean_benchmark_suite, \
+    build_run_log_filename
 
 
 class BenchmarkJob:
@@ -70,32 +71,35 @@ def run(target_dirs: list[str], multicore: bool):
         for b in benchmark_iter:
             prm_file = find_single_prm_file(b)
 
-            binary_path, tasks = _extract_meta_parameters(prm_file)
+            bm_params = _extract_meta_parameters(prm_file)
+            binary_path = bm_params['binary']
+            tasks = int(bm_params['tasks'])
+            repeat = int(bm_params['repeat'])
+
             binary_folder = os.path.dirname(binary_path)
-
-            if multicore:
-                raise "multicore processing not implemented yet"
-                allowed_total_jobs = 6 # todo
-                wait_duration = 1
-                while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
-                    wait_duration = min(600, wait_duration * 2)
-
-            else:
-                for j in active_jobs:
-                    j.wait()
-
 
             if binary_folder not in built_folders:
                 _build_project(binary_folder)
                 built_folders.append(binary_folder)
 
             prep_fresh_directory(b)
-            clean_directory(os.path.join(b, 'matplots'))
-            clean_directory(os.path.join(b, 'vtk'))
+            clean_benchmark_suite(b)
 
-            print(f"starting benchmark {b}")
-            job = exec_benchmark(b, prm_file)
-            active_jobs.append(job)
+            for i in range(repeat):
+                if multicore:
+                    raise "multicore processing not implemented yet"
+                    allowed_total_jobs = 6  # todo
+                    wait_duration = 1
+                    while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
+                        wait_duration = min(600, wait_duration * 2)
+
+                else:
+                    for j in active_jobs:
+                        j.wait()
+
+                print(f"starting benchmark {b}, repetition {i}")
+                job = exec_benchmark(b, prm_file, f"{build_run_log_filename(i)}")
+                active_jobs.append(job)
 
         for j in active_jobs:
             j.wait()
@@ -134,7 +138,7 @@ def _build_project(bin_folder: str) -> None:
     os.chdir(cwd)
 
 
-def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:
+def _extract_meta_parameters(param_file_path: str) -> dict[str, str]:
     with open(param_file_path) as param_file:
         param_file_content = param_file.read()
 
@@ -143,26 +147,31 @@ def _extract_meta_parameters(param_file_path: str) -> tuple[str, int]:
     if "BenchmarkMetaData" not in params:
         raise ValueError(f"No benchmark metadata found in {param_file_path}, aborting run")
 
-    if "binary" not in params["BenchmarkMetaData"]:
+    benchmark_params = params["BenchmarkMetaData"]
+
+    if "binary" not in benchmark_params:
         raise ValueError(f"No binary path found in {param_file_path}, aborting run")
 
-    if "tasks" not in params["BenchmarkMetaData"]:
+    if "tasks" not in benchmark_params:
         raise ValueError(f"No tasks found in {param_file_path}, aborting run")
 
-    return params["BenchmarkMetaData"]["binary"], int(params["BenchmarkMetaData"]["tasks"])
+    if "repeat" not in benchmark_params:
+        benchmark_params["repeat"] = "1"
+
+    if "reduce" not in benchmark_params:
+        benchmark_params["reduce"] = "max"
+
+    return benchmark_params
 
 
-# todo is changing cwd even needed anymore?
-def _exec_on_laptop(target_dir: str, param_file_path: str) -> LaptopJob:
-    cwd = os.getcwd()
+def _exec_on_laptop(target_dir: str, param_file_path: str,
+                    output_name: str = build_run_log_filename(0)) -> LaptopJob:
+    params = _extract_meta_parameters(param_file_path)
+    binary_path = params["binary"]
+    tasks = int(params["tasks"])
 
-    binary_path, tasks = _extract_meta_parameters(param_file_path)
-    bin_folder = os.path.dirname(binary_path)
-    output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
-    jobscript_filepath = os.path.join(cwd, "job_laptop.sh")
-
-    # change to binary directory for the make call in the job script
-    os.chdir(bin_folder)
+    output_filepath = os.path.join(target_dir, output_name)
+    jobscript_filepath = os.path.join(os.path.dirname(__file__), '..', "job_laptop.sh")
 
     # todo is this automatically running?
     job = Popen([jobscript_filepath, binary_path, param_file_path, output_filepath,
@@ -172,20 +181,19 @@ def _exec_on_laptop(target_dir: str, param_file_path: str) -> LaptopJob:
     #     [jobscript_filepath, binary_path, param_file_path, output_filepath,
     #      str(tasks)])
 
-    os.chdir(cwd)
-
     return LaptopJob(tasks, job)
 
 
-def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:
+def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = build_run_log_filename(0)) -> None:
     fritz_cores_per_node = 72
-    cwd = os.getcwd()
 
-    binary_path, tasks = _extract_meta_parameters(param_file_path)
-    bin_folder = os.path.dirname(binary_path)
-    output_filepath = os.path.join(target_dir, RUN_LOG_FILE_NAME)
+    params = _extract_meta_parameters(param_file_path)
+    binary_path = params["binary"]
+    tasks = int(params["tasks"])
 
-    jobscript_template_filepath = os.path.join(cwd, "job_fritz.template")
+    output_filepath = os.path.join(target_dir, output_name)
+
+    jobscript_template_filepath = os.path.join(os.path.dirname(__file__), '..', "job_fritz.template")
     nodes = math.ceil(tasks / fritz_cores_per_node)
     tasks_per_node = min(fritz_cores_per_node, tasks)
 
@@ -204,9 +212,6 @@ def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:
     with open(jobscript_filepath, 'w') as f:
         f.write(jobscript)
 
-    # change to binary directory for the make call in the job script
-    os.chdir(bin_folder)
-
     result = subprocess.run(
         ["sbatch", jobscript_filepath, binary_path, param_file_path,
          output_filepath, str(tasks)],
@@ -220,8 +225,6 @@ def _exec_on_fritz(target_dir: str, param_file_path: str) -> None:
     print(f"job id: {jobid}")
 
     _wait_until_slurm_job_finished(jobid)
-
-    os.chdir(cwd)
 
 
 def _is_slurm_job_finished(jobid: str) -> bool:

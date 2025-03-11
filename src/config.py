@@ -5,7 +5,9 @@ from src.utils import BenchmarkIterator, find_prm_files, format_prm_file, parse_
 _default_config = {
     "BenchmarkMetaData": {
         "binary": '',
-        "tasks": 1
+        "tasks": 1,
+        "repeat": 1,
+        "reduce": "avg",
     },
     "Parameters": {
         "vtk": False,
@@ -49,6 +51,7 @@ _default_config = {
     }
 }
 
+
 def _parse_assignment(assignment: str) -> tuple[tuple[str, str], str]:
     assert assignment.count('=') == 1, 'config field assignments must have exactly one "="'
 
@@ -75,6 +78,7 @@ def _sanitize_parameter_value(value):
     value = str(value)
 
     return value
+
 
 class BenchmarkConfig:
     fields = {}
@@ -128,10 +132,12 @@ class BenchmarkConfig:
 
         return formatted
 
-def init_default_config (ba_path: str) -> BenchmarkConfig:
+
+def init_default_config(ba_path: str) -> BenchmarkConfig:
     return BenchmarkConfig(copy.deepcopy(_default_config), ba_path)
 
-def init_existing_config (config_path: str, ba_path: str) -> BenchmarkConfig:
+
+def init_existing_config(config_path: str, ba_path: str) -> BenchmarkConfig:
     prm_path = find_single_prm_file(config_path)
 
     with open(prm_path, 'r') as f:
@@ -152,6 +158,7 @@ def _get_env_dependent_values() -> str:
         raise ValueError(f"BA_BENCHMARKING_UTILITIES_ENV has invalid value {env}")
 
     return ba_path
+
 
 def set_configs(directory_path: str, assignments: list[str], set_defaults: bool) -> None:
     ba_path = _get_env_dependent_values()

@@ -3,8 +3,6 @@ import re
 from dataclasses import dataclass
 from functools import reduce
 
-RUN_LOG_FILE_NAME = "run.log"
-
 
 @dataclass
 class Point2D:
@@ -33,6 +31,10 @@ def convert_to_valid_filename(string: str) -> str:
         raise ValueError("filename only contains invalid characters or whitespace")
 
     return filename
+
+
+def build_run_log_filename(i: int) -> str:
+    return f"run{i}.log"
 
 
 def find_prm_files(target_dir: str) -> list[str]:
@@ -69,6 +71,16 @@ def parse_prm_file(param_file_content: str) -> dict[str, dict[str, str]]:
             block_dict[field.group(1).strip()] = field.group(2).strip()
 
         prm[block.group(1).strip()] = block_dict
+
+    return prm
+
+
+def load_prm_file(dir: str) -> dict[str, dict[str, str]]:
+    prm_path = find_single_prm_file(dir)
+    with open(prm_path, 'r') as f:
+        prm_content = f.read()
+
+    prm = parse_prm_file(prm_content)
 
     return prm
 
@@ -176,8 +188,11 @@ def build_std_plot_filename(benchmarks: list[str], metrics: list[str] | None) ->
     return f"{benchmarks_str}.{metrics_str}.pdf"
 
 
-def clean_directory(directory: str) -> None:
+def clean_directory(directory: str, file_ext: str | None = None) -> None:
     for filename in os.listdir(directory):
+        if file_ext is not None and not filename.endswith(file_ext):
+            continue
+
         file_path = os.path.join(directory, filename)
         try:
             if os.path.isfile(file_path):
@@ -186,6 +201,12 @@ def clean_directory(directory: str) -> None:
                 print(f'Cleaning directory encountered unexpected file format of {filename} in directory {directory}')
         except Exception as e:
             print(f'Failed to delete {file_path}. Reason: {e}')
+
+
+def clean_benchmark_suite(path: str) -> None:
+    clean_directory(os.path.join(path, 'matplots'))
+    clean_directory(os.path.join(path, 'vtk'))
+    clean_directory(path, '.log')
 
 
 def benchmark_fold_iterator(directory_path: str, leaf_action, node_action):
