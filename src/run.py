@@ -24,28 +24,41 @@ class BenchmarkJob:
 
 
 class LaptopJob(BenchmarkJob):
-    subprocess: Popen
+    _subprocess: Popen
 
     def __init__(self, tasks: int, subprocess: Popen):
         self.tasks = tasks
-        self.subprocess = subprocess
+        self._subprocess = subprocess
 
     def poll(self) -> bool:
-        return self.subprocess.poll() is not None
+        return self._subprocess.poll() is not None
 
     def wait(self) -> None:
-        self.subprocess.wait()
+        self._subprocess.wait()
 
         return None
 
     def kill(self) -> None:
-        self.subprocess.kill()
+        self._subprocess.kill()
 
 
 class FritzJob(BenchmarkJob):
-    subprocess: Popen
+    _job_id: str
 
-    # todo
+    def __init__(self, tasks: int, _job_id: str):
+        self.tasks = tasks
+        self._job_id = _job_id
+
+    def poll(self) -> bool:
+        return _is_slurm_job_finished(self._job_id)
+
+    def wait(self) -> None:
+        _wait_until_slurm_job_finished(self._job_id)
+
+        return None
+
+    def kill(self) -> None:
+        _cancel_slurm_job(self._job_id)
 
 
 def run(target_dirs: list[str], multicore: bool):
@@ -56,9 +69,7 @@ def run(target_dirs: list[str], multicore: bool):
     elif env == "laptop":
         exec_benchmark = _exec_on_laptop
     elif env == "fritz":
-        # exec_benchmark = _exec_on_fritz
-        raise ValueError(
-            "running on fritz still has to implement parallel jobs: handling slurm, jobscript copying (running parallel jobs might cause problems if copied job files clash)")
+        exec_benchmark = _exec_on_fritz
     else:
         raise ValueError("invalid BA_BENCHMARKING_UTILITIES_ENV value " + env)
 
@@ -88,7 +99,13 @@ def run(target_dirs: list[str], multicore: bool):
             for i in range(repeat):
                 if multicore:
                     raise "multicore processing not implemented yet"
-                    allowed_total_jobs = 6  # todo
+
+                    allowed_total_jobs = 1
+                    if env == 'laptop':
+                        allowed_total_jobs = 6  # todo
+                    elif env == 'fritz':
+                        allowed_total_jobs = 720
+
                     wait_duration = 1
                     while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
                         wait_duration = min(600, wait_duration * 2)
@@ -184,7 +201,7 @@ def _exec_on_laptop(target_dir: str, param_file_path: str,
     return LaptopJob(tasks, job)
 
 
-def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = build_run_log_filename(0)) -> None:
+def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = build_run_log_filename(0)) -> FritzJob:
     fritz_cores_per_node = 72
 
     params = _extract_meta_parameters(param_file_path)
@@ -224,7 +241,7 @@ def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = bui
     jobid = match.group(1)
     print(f"job id: {jobid}")
 
-    _wait_until_slurm_job_finished(jobid)
+    return FritzJob(tasks, jobid)
 
 
 def _is_slurm_job_finished(jobid: str) -> bool:
@@ -246,7 +263,7 @@ def _is_slurm_job_finished(jobid: str) -> bool:
     return jobstatus == "CG"
 
 
-# typical waiting with exponentially increasing wait duration, capped at 10 min
+# usual waiting with exponentially increasing wait duration, capped at 10 min
 def _wait_until_slurm_job_finished(jobid: str) -> None:
     max_duration = 600
 
@@ -255,3 +272,8 @@ def _wait_until_slurm_job_finished(jobid: str) -> None:
         print(f"waiting {duration}s...")
         time.sleep(duration)
         duration = min(max_duration, duration * 2)
+
+
+def _cancel_slurm_job(jobid: str) -> None:
+    result = subprocess.run(["scancel", jobid], stdout=subprocess.PIPE)
+    # todo wait until it's really finished
