@@ -104,7 +104,8 @@ def format_prm_file(prm_file_content: str) -> str:
     newline = 0
 
     parameter_blocks = [
-        "vtk", "vtk_output", "minLevel", "maxLevel", "meshFile", "maxNGIterations", "initialGuessType",
+        "vtk", "vtk_output", "minLevel", "maxLevel", "meshFile", "meshX", "meshY", "meshZ", "maxNGIterations",
+        "initialGuessType",
         "initialGuessValue",
         newline,
         "ngOperator",
@@ -176,6 +177,9 @@ def format_prm_file(prm_file_content: str) -> str:
 
     formatted_text += add_block("BenchmarkMetaData")
     del prm["BenchmarkMetaData"]
+
+    formatted_text += add_block("FritzMetaParameters")
+    del prm["FritzMetaParameters"]
 
     formatted_text += "Parameters\n{\n"
     formatted_text += add_formatted_blocks("Parameters", parameter_blocks, 1)
