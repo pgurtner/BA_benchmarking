@@ -105,6 +105,9 @@ def run(target_dirs: list[str], multicore: bool):
                     elif env == 'fritz':
                         allowed_total_jobs = 20 * 72
 
+                    # todo rearranging remaining jobs might improve performance
+                    #   e.g. if small and big jobs are mixed, performance is waisted
+                    #   a simple idea would be to sort jobs by size
                     wait_duration = 1
                     while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
                         wait_duration = min(600, wait_duration * 2)
@@ -182,13 +185,11 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
     params = load_benchmark_parameters(target_dir)
 
     assert "FritzMetaParameters" in params
-    assert "frequency" in params["FritzMetaParameters"]
     assert "pinThreads" in params["FritzMetaParameters"]
 
     binary_path = params["BenchmarkMetaData"]["binary"]
     tasks = int(params["BenchmarkMetaData"]["tasks"])
-    frequency = int(params["FritzMetaParameters"]["frequency"])
-    pinThreads = bool(params["FritzMetaParameters"]["pinThreads"])
+    pinThreads = params["FritzMetaParameters"]["pinThreads"]
 
     output_filepath = os.path.join(target_dir, output_name)
 
@@ -202,10 +203,16 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
     jobscript = jobscript_template.replace("__NODES__", str(nodes)).replace("__NTASKS_PER_NODE__",
                                                                             str(tasks_per_node))
 
-    if pinThreads:
+    if pinThreads == "true":
         jobscript = jobscript.replace("__THREAD_PINNING__", "likwid-pin -q -C N:scatter")
     else:
         jobscript = jobscript.replace("__THREAD_PINNING__", "")
+
+    if "frequency" in params["MetaFritzParameters"]:
+        frequency = params["MetaFritzParameters"]["frequency"]
+        jobscript = jobscript.replace("__CPU_FREQUENCY__", f"--cpu-freq={frequency}-{frequency}:performance")
+    else:
+        jobscript = jobscript.replace("__CPU_FREQUENCY__", "")
 
     if nodes >= 65:
         jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "-p big")
@@ -219,7 +226,7 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
 
     result = subprocess.run(
         ["sbatch", jobscript_filepath, binary_path, param_file_path,
-         output_filepath, str(frequency)],
+         output_filepath],
         stdout=subprocess.PIPE)
 
     # retrieve the job id to wait for the job's completion
