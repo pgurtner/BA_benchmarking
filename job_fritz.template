@@ -14,4 +14,4 @@ unset SLURM_EXPORT_ENV
 
 echo "running benchmark..."
 
-srun __DEPENDANT_SRUN_FLAGS__ __CPU_FREQENCY__ --output="$3" __THREAD_PINNING__ "$1" "$2"
+srun __DEPENDANT_SRUN_FLAGS__ __CPU_FREQUENCY__ --output="$3" __THREAD_PINNING__ "$1" "$2"
