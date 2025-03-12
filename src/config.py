@@ -9,6 +9,10 @@ _default_config = {
         "repeat": 1,
         "reduce": "avg",
     },
+    "FritzMetaParameters": {
+        "frequency": 2_000_000,
+        "pinThreads": True
+    },
     "Parameters": {
         "vtk": False,
         "vtk_output": '',

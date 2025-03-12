@@ -6,8 +6,8 @@ import time
 from subprocess import Popen
 
 from src.config import prep_fresh_directory
-from src.utils import parse_prm_file, find_single_prm_file, BenchmarkIterator, clean_benchmark_suite, \
-    build_run_log_filename
+from src.utils import find_single_prm_file, BenchmarkIterator, clean_benchmark_suite, \
+    build_run_log_filename, load_benchmark_parameters
 
 
 class BenchmarkJob:
@@ -80,9 +80,7 @@ def run(target_dirs: list[str], multicore: bool):
 
     try:
         for b in benchmark_iter:
-            prm_file = find_single_prm_file(b)
-
-            bm_params = _extract_meta_parameters(prm_file)
+            bm_params = load_benchmark_parameters(b)["BenchmarkMetaData"]
             binary_path = bm_params['binary']
             tasks = int(bm_params['tasks'])
             repeat = int(bm_params['repeat'])
@@ -98,13 +96,14 @@ def run(target_dirs: list[str], multicore: bool):
 
             for i in range(repeat):
                 if multicore:
-                    raise "multicore processing not implemented yet"
+                    if env == "laptop":
+                        raise "multicore processing not implemented yet on laptop"
 
                     allowed_total_jobs = 1
                     if env == 'laptop':
                         allowed_total_jobs = 6  # todo
                     elif env == 'fritz':
-                        allowed_total_jobs = 720
+                        allowed_total_jobs = 20 * 72
 
                     wait_duration = 1
                     while _waiting_update_and_check_is_busy(allowed_total_jobs, active_jobs, tasks, wait_duration):
@@ -115,7 +114,7 @@ def run(target_dirs: list[str], multicore: bool):
                         j.wait()
 
                 print(f"starting benchmark {b}, repetition {i}")
-                job = exec_benchmark(b, prm_file, f"{build_run_log_filename(i)}")
+                job = exec_benchmark(b, f"{build_run_log_filename(i)}")
                 active_jobs.append(job)
 
         for j in active_jobs:
@@ -155,37 +154,12 @@ def _build_project(bin_folder: str) -> None:
     os.chdir(cwd)
 
 
-def _extract_meta_parameters(param_file_path: str) -> dict[str, str]:
-    with open(param_file_path) as param_file:
-        param_file_content = param_file.read()
-
-    params = parse_prm_file(param_file_content)
-
-    if "BenchmarkMetaData" not in params:
-        raise ValueError(f"No benchmark metadata found in {param_file_path}, aborting run")
-
-    benchmark_params = params["BenchmarkMetaData"]
-
-    if "binary" not in benchmark_params:
-        raise ValueError(f"No binary path found in {param_file_path}, aborting run")
-
-    if "tasks" not in benchmark_params:
-        raise ValueError(f"No tasks found in {param_file_path}, aborting run")
-
-    if "repeat" not in benchmark_params:
-        benchmark_params["repeat"] = "1"
-
-    if "reduce" not in benchmark_params:
-        benchmark_params["reduce"] = "max"
-
-    return benchmark_params
-
-
-def _exec_on_laptop(target_dir: str, param_file_path: str,
+def _exec_on_laptop(target_dir: str,
                     output_name: str = build_run_log_filename(0)) -> LaptopJob:
-    params = _extract_meta_parameters(param_file_path)
-    binary_path = params["binary"]
-    tasks = int(params["tasks"])
+    param_file_path = find_single_prm_file(target_dir)
+    params = load_benchmark_parameters(target_dir)
+    binary_path = params["BenchmarkMetaData"]["binary"]
+    tasks = int(params["BenchmarkMetaData"]["tasks"])
 
     output_filepath = os.path.join(target_dir, output_name)
     jobscript_filepath = os.path.join(os.path.dirname(__file__), '..', "job_laptop.sh")
@@ -201,12 +175,20 @@ def _exec_on_laptop(target_dir: str, param_file_path: str,
     return LaptopJob(tasks, job)
 
 
-def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = build_run_log_filename(0)) -> FritzJob:
+def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)) -> FritzJob:
     fritz_cores_per_node = 72
 
-    params = _extract_meta_parameters(param_file_path)
-    binary_path = params["binary"]
-    tasks = int(params["tasks"])
+    param_file_path = find_single_prm_file(target_dir)
+    params = load_benchmark_parameters(target_dir)
+
+    assert "FritzMetaParameters" in params
+    assert "frequency" in params["FritzMetaParameters"]
+    assert "pinThreads" in params["FritzMetaParameters"]
+
+    binary_path = params["BenchmarkMetaData"]["binary"]
+    tasks = int(params["BenchmarkMetaData"]["tasks"])
+    frequency = int(params["FritzMetaParameters"]["frequency"])
+    pinThreads = bool(params["FritzMetaParameters"]["pinThreads"])
 
     output_filepath = os.path.join(target_dir, output_name)
 
@@ -219,10 +201,16 @@ def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = bui
 
     jobscript = jobscript_template.replace("__NODES__", str(nodes)).replace("__NTASKS_PER_NODE__",
                                                                             str(tasks_per_node))
+
+    if pinThreads:
+        jobscript = jobscript.replace("__THREAD_PINNING__", "likwid-pin -q -C N:scatter")
+    else:
+        jobscript = jobscript.replace("__THREAD_PINNING__", "")
+
     if nodes >= 65:
         jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "-p big")
     else:
-        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "");
+        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "")
 
     jobscript_filepath = os.path.join(target_dir, "job_fritz.sh")
 
@@ -231,7 +219,7 @@ def _exec_on_fritz(target_dir: str, param_file_path: str, output_name: str = bui
 
     result = subprocess.run(
         ["sbatch", jobscript_filepath, binary_path, param_file_path,
-         output_filepath, str(tasks)],
+         output_filepath, str(frequency)],
         stdout=subprocess.PIPE)
 
     # retrieve the job id to wait for the job's completion
@@ -276,4 +264,3 @@ def _wait_until_slurm_job_finished(jobid: str) -> None:
 
 def _cancel_slurm_job(jobid: str) -> None:
     result = subprocess.run(["scancel", jobid], stdout=subprocess.PIPE)
-    # todo wait until it's really finished

@@ -5,7 +5,7 @@
 #SBATCH --time=06:00:00
 #SBATCH --export=NONE
 
-if [ "$#" -ne 3 ]; then
+if [ "$#" -ne 4 ]; then
     echo "Illegal number of parameters. Needs bin, .prm file and output."
     exit 1
 fi
@@ -14,4 +14,4 @@ unset SLURM_EXPORT_ENV
 
 echo "running benchmark..."
 
-srun __DEPENDANT_SRUN_FLAGS__ --output="$3" "$1" "$2"
+srun __DEPENDANT_SRUN_FLAGS__ --cpu-freq=$4-$4:performance --output="$3" __THREAD_PINNING__ "$1" "$2"

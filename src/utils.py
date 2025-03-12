@@ -85,6 +85,20 @@ def load_prm_file(dir: str) -> dict[str, dict[str, str]]:
     return prm
 
 
+def load_benchmark_parameters(dir: str) -> dict[str, dict[str, str]]:
+    prm = load_prm_file(dir)
+
+    assert "BenchmarkMetaData" in prm
+    assert "binary" in prm["BenchmarkMetaData"]
+    assert "tasks" in prm["BenchmarkMetaData"]
+    assert "repeat" in prm["BenchmarkMetaData"]
+    assert "reduce" in prm["BenchmarkMetaData"]
+
+    assert "Parameters" in prm
+
+    return prm
+
+
 def format_prm_file(prm_file_content: str) -> str:
     prm = parse_prm_file(prm_file_content)
     newline = 0
