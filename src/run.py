@@ -208,8 +208,8 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
     else:
         jobscript = jobscript.replace("__THREAD_PINNING__", "")
 
-    if "frequency" in params["MetaFritzParameters"]:
-        frequency = params["MetaFritzParameters"]["frequency"]
+    if "frequency" in params["FritzMetaParameters"]:
+        frequency = params["FritzMetaParameters"]["frequency"]
         jobscript = jobscript.replace("__CPU_FREQUENCY__", f"--cpu-freq={frequency}-{frequency}:performance")
     else:
         jobscript = jobscript.replace("__CPU_FREQUENCY__", "")
