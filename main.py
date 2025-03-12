@@ -32,8 +32,11 @@ def main():
 
     config_parser = subparsers.add_parser('config')
     config_parser.add_argument("suite_name", help="name of the benchmark suite", type=str)
-    config_parser.add_argument("--create", action='store_true', help="create the config along with the benchmark suite directories, implies --set-defaults")
+    config_parser.add_argument("--create", action='store_true',
+                               help="create the config along with the benchmark suite directories, implies --set-defaults")
     config_parser.add_argument("--set-defaults", action='store_true', help="sets the configs to the default config")
+    config_parser.add_argument("--add-missing-defaults", action='store_true',
+                               help="sets missing values to their default")
     config_parser.add_argument("--assignments", nargs='*',
                                help="<Block>.<field>=<value>, for non-default updates")
 
@@ -77,15 +80,16 @@ def main():
         name = args.suite_name
         create = bool(args.create)
         set_defaults = bool(args.set_defaults)
+        add_missing_defaults = bool(args.add_missing_defaults)
         assignments = []
-    
+
         if args.assignments is not None:
             assignments = args.assignments
 
         if create:
             create_config(name, assignments)
         else:
-            set_configs(name, assignments, set_defaults)
+            set_configs(name, assignments, set_defaults, add_missing_defaults)
 
     elif args.command == 'meshgen':
         total_tets = int(args.total_tets)

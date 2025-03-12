@@ -164,7 +164,7 @@ def _get_env_dependent_values() -> str:
     return ba_path
 
 
-def set_configs(directory_path: str, assignments: list[str], set_defaults: bool) -> None:
+def set_configs(directory_path: str, assignments: list[str], set_defaults: bool, add_missing_defaults: bool) -> None:
     ba_path = _get_env_dependent_values()
 
     if set_defaults:
@@ -179,6 +179,16 @@ def set_configs(directory_path: str, assignments: list[str], set_defaults: bool)
             config.set_assignments(assignments)
 
         config.set_individual_fields(b)
+
+        if add_missing_defaults:
+            for block in _default_config:
+                if block not in config.fields:
+                    config.fields[block] = _default_config[block]
+                    continue
+
+                for field in _default_config[block]:
+                    if field not in config.fields[block]:
+                        config.fields[block][field] = _default_config[block][field]
 
         prm_files = find_prm_files(b)
 
