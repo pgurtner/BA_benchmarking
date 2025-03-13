@@ -55,6 +55,11 @@ _default_config = {
     }
 }
 
+_alternatives_to_defaults = {
+    "meshFile": ["meshX", "meshY", "meshZ"],
+    "mgMaxIter": ["mgDynamicMaxIterStart"],
+}
+
 
 def _parse_assignment(assignment: str) -> tuple[tuple[str, str], str]:
     assert assignment.count('=') == 1, 'config field assignments must have exactly one "="'
@@ -180,6 +185,8 @@ def set_configs(directory_path: str, assignments: list[str], set_defaults: bool,
 
         config.set_individual_fields(b)
 
+        # todo if this would happen before config.set_assignemnts, one could edit the added defaults in the cmd line call
+        # todo don't add fields whose alternatives are already set
         if add_missing_defaults:
             for block in _default_config:
                 if block not in config.fields:
@@ -188,7 +195,13 @@ def set_configs(directory_path: str, assignments: list[str], set_defaults: bool,
 
                 for field in _default_config[block]:
                     if field not in config.fields[block]:
-                        config.fields[block][field] = _default_config[block][field]
+                        if field in _alternatives_to_defaults:
+                            alternative_is_set = map(lambda a: a in config.fields[block],
+                                                     _alternatives_to_defaults[field])
+                            if not any(alternative_is_set):
+                                config.fields[block][field] = _default_config[block][field]
+                        else:
+                            config.fields[block][field] = _default_config[block][field]
 
         prm_files = find_prm_files(b)
 
