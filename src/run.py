@@ -112,10 +112,6 @@ def run_on_laptop(target_dirs: list[str], multicore: bool):
             clean_benchmark_suite(b)
 
             for i in range(repeat):
-                # todo when using multicore on fritz the cmd line logs are confusing
-                #   every job.poll call prints "still pending" if job is pending but when running it prints nothing
-                #   this seems like it's still pending and the python script is waiting far too long.
-                #   additionally in singlecore normal "is running" logs are printed, which makes this even more confusing.
                 if multicore:
                     raise ValueError("multicore processing not implemented yet on laptop")
 
@@ -151,6 +147,7 @@ def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
     tasks_per_node = 72
     max_node_amount = 32
 
+    built_folders = []
     chunks: dict[int, list[tuple[str, str]]] = {}
 
     # partition into chunks with same tasks amount
@@ -158,6 +155,20 @@ def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
         params = load_benchmark_parameters(b)
         tasks = int(params['BenchmarkMetaData']['tasks'])
         repeat = int(params['BenchmarkMetaData']['repeat'])
+
+        # todo building and cleaning should be outside partitioning
+        #   these things should be outsourced and merged from laptop and slurm execution
+        # build all binaries alongside partitioning
+        binary_path = params['BenchmarkMetaData']['binary']
+        binary_folder = os.path.dirname(binary_path)
+
+        if binary_folder not in built_folders:
+            _build_project(binary_folder)
+            built_folders.append(binary_folder)
+
+        # and clean the benchmark directory
+        prep_fresh_directory(b)
+        clean_benchmark_suite(b)
 
         if tasks not in chunks:
             chunks[tasks] = []
