@@ -9,9 +9,15 @@ from src.config import prep_fresh_directory
 from src.utils import find_single_prm_file, BenchmarkIterator, clean_benchmark_suite, \
     build_run_log_filename, load_benchmark_parameters
 
+import datetime
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class BenchmarkJob:
     tasks: int
+    name: str
 
     def poll(self) -> bool:
         return False
@@ -26,7 +32,8 @@ class BenchmarkJob:
 class LaptopJob(BenchmarkJob):
     _subprocess: Popen
 
-    def __init__(self, tasks: int, subprocess: Popen):
+    def __init__(self, name: str, tasks: int, subprocess: Popen):
+        self.name = name
         self.tasks = tasks
         self._subprocess = subprocess
 
@@ -45,7 +52,8 @@ class LaptopJob(BenchmarkJob):
 class FritzJob(BenchmarkJob):
     _job_id: str
 
-    def __init__(self, tasks: int, _job_id: str):
+    def __init__(self, name: str, tasks: int, _job_id: str):
+        self.name = name
         self.tasks = tasks
         self._job_id = _job_id
 
@@ -62,6 +70,12 @@ class FritzJob(BenchmarkJob):
 
 
 def run(target_dirs: list[str], multicore: bool):
+    date = datetime.datetime.now()
+    log_name = date.strftime("%Y-%m-%d_%Hh-%Mm-%Ss")
+    log_path = os.path.join("benchmarks", "logs", log_name + ".log")
+    logging.basicConfig(filename=log_path, level=logging.INFO)
+    _logger.info(f"Starting at time {date}.")
+
     env = os.environ.get('BA_BENCHMARKING_UTILITIES_ENV')
 
     if env is None:
@@ -95,15 +109,19 @@ def run(target_dirs: list[str], multicore: bool):
             clean_benchmark_suite(b)
 
             for i in range(repeat):
+                # todo when using multicore on fritz the cmd line logs are confusing
+                #   every job.poll call prints "still pending" if job is pending but when running it prints nothing
+                #   this seems like it's still pending and the python script is waiting far too long.
+                #   additionally in singlecore normal "is running" logs are printed, which makes this even more confusing.
                 if multicore:
                     if env == "laptop":
-                        raise "multicore processing not implemented yet on laptop"
+                        raise ValueError("multicore processing not implemented yet on laptop")
 
                     allowed_total_jobs = 1
                     if env == 'laptop':
                         allowed_total_jobs = 6  # todo
                     elif env == 'fritz':
-                        allowed_total_jobs = 20 * 72
+                        allowed_total_jobs = 32 * 72
 
                     # todo rearranging remaining jobs might improve performance
                     #   e.g. if small and big jobs are mixed, performance is waisted
@@ -116,15 +134,15 @@ def run(target_dirs: list[str], multicore: bool):
                     for j in active_jobs:
                         j.wait()
 
-                print(f"starting benchmark {b}, repetition {i}")
                 job = exec_benchmark(b, f"{build_run_log_filename(i)}")
+                _logger.info(f"started job " + job.name)
                 active_jobs.append(job)
 
         for j in active_jobs:
             j.wait()
 
     except KeyboardInterrupt:
-        print("canceled benchmarks")
+        _logger.info("canceled benchmarks")
 
     for j in active_jobs:
         j.kill()
@@ -136,6 +154,7 @@ def _waiting_update_and_check_is_busy(task_limit: int, active_jobs: list[Benchma
     for j in active_jobs:
         if j.poll():
             active_jobs.remove(j)
+            _logger.info(f"finished job {j.name}")
 
     active_tasks = sum(map(lambda j: j.tasks, active_jobs))
 
@@ -152,6 +171,7 @@ def _build_project(bin_folder: str) -> None:
     os.chdir(bin_folder)
 
     print(f"compiling {bin_folder}")
+    _logger.info(f"compiling {bin_folder}")
     subprocess.call(['make'])
 
     os.chdir(cwd)
@@ -175,7 +195,7 @@ def _exec_on_laptop(target_dir: str,
     #     [jobscript_filepath, binary_path, param_file_path, output_filepath,
     #      str(tasks)])
 
-    return LaptopJob(tasks, job)
+    return LaptopJob(output_filepath, tasks, job)
 
 
 def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)) -> FritzJob:
@@ -234,9 +254,9 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
     pattern = r"Submitted batch job (\d+)"
     match = re.search(pattern, result)
     jobid = match.group(1)
-    print(f"job id: {jobid}")
+    _logger.info(f"submitted batch job {jobid}")
 
-    return FritzJob(tasks, jobid)
+    return FritzJob(output_filepath, tasks, jobid)
 
 
 def _is_slurm_job_finished(jobid: str) -> bool:
@@ -251,9 +271,6 @@ def _is_slurm_job_finished(jobid: str) -> bool:
 
     jobstatus = match.group(1)
 
-    if jobstatus == "PD":
-        print(f"job {jobid} still pending...")
-
     # if it is displayed, only(?) the status CG means it is finished
     return jobstatus == "CG"
 
@@ -264,10 +281,9 @@ def _wait_until_slurm_job_finished(jobid: str) -> None:
 
     duration = 1
     while not _is_slurm_job_finished(jobid):
-        print(f"waiting {duration}s...")
         time.sleep(duration)
         duration = min(max_duration, duration * 2)
 
 
 def _cancel_slurm_job(jobid: str) -> None:
-    result = subprocess.run(["scancel", jobid], stdout=subprocess.PIPE)
+    subprocess.run(["scancel", jobid], stdout=subprocess.PIPE)

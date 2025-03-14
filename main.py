@@ -9,6 +9,10 @@ from src.run import run
 from src.plot import std_plot
 from src.move import move_benchmark_folders
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 def main():
     parser = argparse.ArgumentParser(prog='benchmarking-utilities')
@@ -50,6 +54,10 @@ def main():
     move_parser.add_argument("to", help="new benchmark file location")
 
     args = parser.parse_args()
+
+    # todo this is ignored
+    #   find a good way to add logging to this entire project
+    # _logger.info(args)
 
     if args.command == 'run':
         target_dirs = list(map(os.path.abspath, args.dirs))
@@ -137,7 +145,7 @@ def exec_plot_command(args):
     show = bool(args.show)
 
     if args.for_each is not None and args.benchmarks is not None:
-        print("exactly one of --for-each or --benchmarks should be specified")
+        _logger.error("exactly one of --for-each or --benchmarks should be specified")
         exit(1)
 
     if args.for_each is None and args.benchmarks is None:

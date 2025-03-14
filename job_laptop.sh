@@ -5,5 +5,4 @@ if [ "$#" -ne 4 ]; then
     exit 1
 fi
 
-echo "running benchmark..."
 mpirun -N "$4" "$1" "$2" >"$3"

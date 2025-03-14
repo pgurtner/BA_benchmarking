@@ -3,6 +3,10 @@ import re
 from dataclasses import dataclass
 from functools import reduce
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 @dataclass
 class Point2D:
@@ -216,9 +220,10 @@ def clean_directory(directory: str, file_ext: str | None = None) -> None:
             if os.path.isfile(file_path):
                 os.unlink(file_path)
             else:
-                print(f'Cleaning directory encountered unexpected file format of {filename} in directory {directory}')
+                _logger.warning(
+                    f'Cleaning directory encountered unexpected file format of {filename} in directory {directory}')
         except Exception as e:
-            print(f'Failed to delete {file_path}. Reason: {e}')
+            _logger.error(f'Failed to delete {file_path}. Reason: {e}')
 
 
 def clean_benchmark_suite(path: str) -> None:

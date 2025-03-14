@@ -5,6 +5,10 @@ from functools import reduce
 
 from src.utils import Point2D, Graph
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class MetricDeclaration:
     name: str
@@ -80,8 +84,8 @@ class Benchmark:
         self.measurements = list(filter(lambda m: len(m.values) > 0, self.measurements))
 
         if len(self.measurements) == 0:
-            print(
-                f"Warning: removed all measurements of {self.decl.name} after restricting to metrics {restricted_metrics}")
+            _logger.warning(
+                f"Removed all measurements of {self.decl.name} after restricting to metrics {restricted_metrics}")
 
     def to_graphs(self) -> list[Graph]:
         if len(self.measurements) == 0:

@@ -13,6 +13,10 @@ from src.extract import extract_benchmarks, restrict_benchmarks
 from src.utils import Graph, list_flatten, build_std_plot_filename, BenchmarkIterator, find_single_prm_file, \
     load_prm_file, build_run_log_filename
 
+import logging
+
+_logger = logging.getLogger(__name__)
+
 
 class PlotAxisType(Enum):
     LINEAR = 'linear'
@@ -184,8 +188,9 @@ def std_plot(target_dir: str, wanted_benchmarks: list[str] | None, wanted_metric
         for i in range(repetitions_amount):
             run_log_path = os.path.join(benchmark_dir, build_run_log_filename(i))
             if not os.path.isfile(run_log_path):
-                print(
+                _logger.error(
                     f"{benchmark_dir} misses run log index {i}, first run the program before trying to plot its benchmarks")
+
                 return
 
         benchmarks = extract_benchmarks(benchmark_dir)
