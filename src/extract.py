@@ -48,7 +48,7 @@ def extract_benchmarks(target_dir: str) -> list[Benchmark]:
         metrics = benchmarks[0].decl.metrics
         # todo assert all metrics are equal
 
-        new_name = benchmark_name + '_reduced'
+        new_name = benchmark_name  # + '_reduced'
         reduced_benchmark_decl = BenchmarkDeclaration(new_name, metrics)
         reduced_benchmark = Benchmark(reduced_benchmark_decl)
 
