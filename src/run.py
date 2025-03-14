@@ -3,6 +3,7 @@ import os
 import re
 import subprocess
 import time
+from functools import reduce
 from subprocess import Popen
 
 from src.config import prep_fresh_directory
@@ -81,12 +82,14 @@ def run(target_dirs: list[str], multicore: bool):
     if env is None:
         raise ValueError("BA_BENCHMARKING_UTILITIES_ENV must be set")
     elif env == "laptop":
-        exec_benchmark = _exec_on_laptop
+        run_on_laptop(target_dirs, multicore)
     elif env == "fritz":
-        exec_benchmark = _exec_on_fritz
+        run_on_slurm_machine(target_dirs, multicore)
     else:
         raise ValueError("invalid BA_BENCHMARKING_UTILITIES_ENV value " + env)
 
+
+def run_on_laptop(target_dirs: list[str], multicore: bool):
     benchmark_iter = BenchmarkIterator(target_dirs)
 
     active_jobs: list[BenchmarkJob] = []
@@ -114,14 +117,9 @@ def run(target_dirs: list[str], multicore: bool):
                 #   this seems like it's still pending and the python script is waiting far too long.
                 #   additionally in singlecore normal "is running" logs are printed, which makes this even more confusing.
                 if multicore:
-                    if env == "laptop":
-                        raise ValueError("multicore processing not implemented yet on laptop")
+                    raise ValueError("multicore processing not implemented yet on laptop")
 
-                    allowed_total_jobs = 1
-                    if env == 'laptop':
-                        allowed_total_jobs = 6  # todo
-                    elif env == 'fritz':
-                        allowed_total_jobs = 32 * 72
+                    allowed_total_jobs = 6  # todo
 
                     # todo rearranging remaining jobs might improve performance
                     #   e.g. if small and big jobs are mixed, performance is waisted
@@ -134,7 +132,7 @@ def run(target_dirs: list[str], multicore: bool):
                     for j in active_jobs:
                         j.wait()
 
-                job = exec_benchmark(b, f"{build_run_log_filename(i)}")
+                job = _exec_on_laptop(b, f"{build_run_log_filename(i)}")
                 _logger.info(f"started job " + job.name)
                 active_jobs.append(job)
 
@@ -146,6 +144,65 @@ def run(target_dirs: list[str], multicore: bool):
 
     for j in active_jobs:
         j.kill()
+
+
+def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
+    benchmark_iter = BenchmarkIterator(target_dirs)
+    tasks_per_node = 72
+    max_node_amount = 32
+
+    chunks: dict[int, list[tuple[str, str]]] = {}
+
+    # partition into chunks with same tasks amount
+    for b in benchmark_iter:
+        params = load_benchmark_parameters(b)
+        tasks = int(params['BenchmarkMetaData']['tasks'])
+        repeat = int(params['BenchmarkMetaData']['repeat'])
+
+        if tasks not in chunks:
+            chunks[tasks] = []
+
+        for i in range(repeat):
+            chunks[tasks].append((b, build_run_log_filename(i)))
+
+    demanded_nodes = sum(map(lambda t: math.ceil(t / tasks_per_node), chunks.keys()))
+    free_nodes = max_node_amount - demanded_nodes
+
+    assert free_nodes > 0, "todo: implement load balancing on slurm machines"
+
+    if 1 in chunks:
+        # spread single node chunks across remaining nodes
+        chunk_size = len(chunks[1]) // (free_nodes + 1)
+        remainder = len(chunks[1]) % (free_nodes + 1)
+        pointer = chunk_size
+
+        if remainder > 0:
+            pointer += 1
+        single_node_chunks = [chunks[1][:pointer]]
+
+        for i in range(1, free_nodes):
+            old_pointer = pointer
+            pointer += chunk_size
+            if remainder > i:
+                pointer += 1
+
+            single_node_chunks.append(chunks[1][old_pointer:pointer])
+
+        single_node_chunks.append(chunks[1][pointer:])
+
+        assert len(single_node_chunks) == free_nodes + 1
+        assert sum(map(lambda c: len(c), single_node_chunks)) == len(chunks[1])
+
+        del chunks[1]
+
+        total_chunks = list(chunks.values()) + single_node_chunks
+    else:
+        total_chunks = list(chunks.values())
+
+    enumerated_chunks = enumerate(total_chunks)
+
+    for chunk_id, chunk in enumerated_chunks:
+        _exec_chunk_on_fritz(chunk, chunk_id)
 
 
 def _waiting_update_and_check_is_busy(task_limit: int, active_jobs: list[BenchmarkJob], needed_tasks: int,
@@ -198,20 +255,27 @@ def _exec_on_laptop(target_dir: str,
     return LaptopJob(output_filepath, tasks, job)
 
 
-def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)) -> FritzJob:
+def _exec_chunk_on_fritz(jobs: list[tuple[str, str]], chunk_index: int):
     fritz_cores_per_node = 72
 
-    param_file_path = find_single_prm_file(target_dir)
-    params = load_benchmark_parameters(target_dir)
+    assert len(jobs) > 0
 
-    assert "FritzMetaParameters" in params
-    assert "pinThreads" in params["FritzMetaParameters"]
+    enumerated_jobs = enumerate(jobs)
 
-    binary_path = params["BenchmarkMetaData"]["binary"]
-    tasks = int(params["BenchmarkMetaData"]["tasks"])
-    pinThreads = params["FritzMetaParameters"]["pinThreads"]
+    param_files = [{}] * len(jobs)
+    for i, j in enumerated_jobs:
+        target_dir, _ = j
+        params = load_benchmark_parameters(target_dir)
 
-    output_filepath = os.path.join(target_dir, output_name)
+        assert "FritzMetaParameters" in params
+        assert "pinThreads" in params["FritzMetaParameters"]
+
+        param_files[i] = params
+
+    tasks = int(param_files[0]["BenchmarkMetaData"]["tasks"])
+    for p in param_files[1:]:
+        p_tasks = int(p["BenchmarkMetaData"]["tasks"])
+        assert tasks == p_tasks, "multiple task amounts in benchmark chunk found"
 
     jobscript_template_filepath = os.path.join(os.path.dirname(__file__), '..', "job_fritz.template")
     nodes = math.ceil(tasks / fritz_cores_per_node)
@@ -223,40 +287,53 @@ def _exec_on_fritz(target_dir: str, output_name: str = build_run_log_filename(0)
     jobscript = jobscript_template.replace("__NODES__", str(nodes)).replace("__NTASKS_PER_NODE__",
                                                                             str(tasks_per_node))
 
-    if pinThreads == "true":
-        jobscript = jobscript.replace("__THREAD_PINNING__", "likwid-pin -q -C N:scatter")
-    else:
-        jobscript = jobscript.replace("__THREAD_PINNING__", "")
+    for i, j in enumerate(jobs):
+        target_dir, output_name = j
+        params = param_files[i]
+        # srun __DEPENDANT_SRUN_FLAGS__ __CPU_FREQUENCY__ --output="$3" __THREAD_PINNING__ "$1" "$2"
 
-    if "frequency" in params["FritzMetaParameters"]:
-        frequency = params["FritzMetaParameters"]["frequency"]
-        jobscript = jobscript.replace("__CPU_FREQUENCY__", f"--cpu-freq={frequency}-{frequency}:performance")
-    else:
-        jobscript = jobscript.replace("__CPU_FREQUENCY__", "")
+        dependant_srun_flags = ""
+        cpu_frequency = ""
+        output_filepath = os.path.abspath(os.path.join(target_dir, output_name))
+        thread_pinning = ""
+        binary_path = params["BenchmarkMetaData"]["binary"]
+        param_file_path = os.path.abspath(find_single_prm_file(target_dir))
 
-    if nodes >= 65:
-        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "-p big")
-    else:
-        jobscript = jobscript.replace("__DEPENDANT_SRUN_FLAGS__", "")
+        pinThreadsParameter = params["FritzMetaParameters"]["pinThreads"]
 
-    jobscript_filepath = os.path.join(target_dir, "job_fritz.sh")
+        if pinThreadsParameter == "true":
+            thread_pinning = "likwid-pin -q -C N:scatter"
+
+        if "frequency" in params["FritzMetaParameters"]:
+            frequency = params["FritzMetaParameters"]["frequency"]
+            cpu_frequency = f"--cpu-freq={frequency}-{frequency}:performance"
+
+        if nodes >= 65:
+            dependant_srun_flags = "-p big"
+
+        srun_line = f'srun {dependant_srun_flags} {cpu_frequency} --output="{output_filepath}" {thread_pinning} "{binary_path}" "{param_file_path}"'
+        jobscript += '\n' + srun_line
+
+    jobscript_filepath = os.path.join("benchmarks", "chunks", f"chunk{chunk_index}_job_fritz.sh")
 
     with open(jobscript_filepath, 'w') as f:
         f.write(jobscript)
 
-    result = subprocess.run(
-        ["sbatch", jobscript_filepath, binary_path, param_file_path,
-         output_filepath],
+    subprocess.run(
+        ["sbatch", jobscript_filepath],
         stdout=subprocess.PIPE)
 
-    # retrieve the job id to wait for the job's completion
-    result = result.stdout.decode("utf-8")
-    pattern = r"Submitted batch job (\d+)"
-    match = re.search(pattern, result)
-    jobid = match.group(1)
-    _logger.info(f"submitted batch job {jobid}")
+    benchmarks_str = reduce(lambda s, b: f"{s}, {b}", map(lambda j: j[0], jobs))
+    _logger.info(f"submitted chunk {chunk_index}, consisting of benchmarks {benchmarks_str}")
 
-    return FritzJob(output_filepath, tasks, jobid)
+    # retrieve the job id to wait for the job's completion
+    # result = result.stdout.decode("utf-8")
+    # pattern = r"Submitted batch job (\d+)"
+    # match = re.search(pattern, result)
+    # jobid = match.group(1)
+    # _logger.info(f"submitted batch job {jobid}")
+    #
+    # return FritzJob(output_filepath, tasks, jobid)
 
 
 def _is_slurm_job_finished(jobid: str) -> bool:
