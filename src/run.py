@@ -84,7 +84,7 @@ def run(target_dirs: list[str], multicore: bool):
     elif env == "laptop":
         run_on_laptop(target_dirs, multicore)
     elif env == "fritz":
-        run_on_slurm_machine(target_dirs, multicore)
+        _run_on_slurm_machine(target_dirs, multicore)
     else:
         raise ValueError("invalid BA_BENCHMARKING_UTILITIES_ENV value " + env)
 
@@ -142,7 +142,7 @@ def run_on_laptop(target_dirs: list[str], multicore: bool):
         j.kill()
 
 
-def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
+def _run_on_slurm_machine(target_dirs: list[str], multicore: bool):
     benchmark_iter = BenchmarkIterator(target_dirs)
     tasks_per_node = 72
     max_node_amount = 32
@@ -181,15 +181,16 @@ def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
 
     assert free_nodes > 0, "todo: implement load balancing on slurm machines"
 
-    if 1 in chunks:
+    if tasks_per_node in chunks:
+        single_node_chunks = chunks[tasks_per_node]
         # spread single node chunks across remaining nodes
-        chunk_size = len(chunks[1]) // (free_nodes + 1)
-        remainder = len(chunks[1]) % (free_nodes + 1)
+        chunk_size = len(single_node_chunks) // (free_nodes + 1)
+        remainder = len(single_node_chunks) % (free_nodes + 1)
         pointer = chunk_size
 
         if remainder > 0:
             pointer += 1
-        single_node_chunks = [chunks[1][:pointer]]
+        partition = [single_node_chunks[:pointer]]
 
         for i in range(1, free_nodes):
             old_pointer = pointer
@@ -197,16 +198,16 @@ def run_on_slurm_machine(target_dirs: list[str], multicore: bool):
             if remainder > i:
                 pointer += 1
 
-            single_node_chunks.append(chunks[1][old_pointer:pointer])
+            partition.append(single_node_chunks[old_pointer:pointer])
 
-        single_node_chunks.append(chunks[1][pointer:])
+        partition.append(single_node_chunks[pointer:])
 
-        assert len(single_node_chunks) == free_nodes + 1
-        assert sum(map(lambda c: len(c), single_node_chunks)) == len(chunks[1])
+        assert len(partition) == free_nodes + 1
+        assert sum(map(lambda c: len(c), partition)) == len(single_node_chunks)
 
-        del chunks[1]
+        del chunks[tasks_per_node]
 
-        total_chunks = list(chunks.values()) + single_node_chunks
+        total_chunks = list(chunks.values()) + partition
     else:
         total_chunks = list(chunks.values())
 
@@ -322,8 +323,9 @@ def _exec_chunk_on_fritz(jobs: list[tuple[str, str]], chunk_index: int):
         if nodes >= 65:
             dependant_srun_flags = "-p big"
 
+        status_log = f'echo starting benchmark {output_filepath}'
         srun_line = f'srun {dependant_srun_flags} {cpu_frequency} --output="{output_filepath}" {thread_pinning} "{binary_path}" "{param_file_path}"'
-        jobscript += '\n' + srun_line
+        jobscript += f'\n{status_log}\n{srun_line}'
 
     jobscript_filepath = os.path.join("benchmarks", "chunks", f"chunk{chunk_index}_job_fritz.sh")
 
