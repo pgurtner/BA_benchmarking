@@ -31,7 +31,8 @@ _default_config = {
         "smoothStepsIncreaseOnCoarserGrids": 0,
         "cycleType": "v",
         "mgMaxIter": 200,
-        "mgTolerance": 1e-14,
+        "mgToleranceType": "constant",
+        "mgToleranceValue": 1e-14,
         "mgInitialGuessType": "random",
         "mgInitialGuessValue": 1e-1,
 
@@ -180,6 +181,7 @@ def set_configs(directory_path: str, assignments: list[str], set_defaults: bool,
 
     for b in benchmark_iter:
         if not set_defaults:
+            # todo if existing config misses BenchmarkMetaData this fails, even if --add-missing-defaults is set
             config = init_existing_config(b, ba_path)
             config.set_assignments(assignments)
 
