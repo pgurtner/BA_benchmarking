@@ -11,6 +11,8 @@ from src.move import move_benchmark_folders
 
 import logging
 
+#from src.utils import BenchmarkIterator, load_prm_file, build_run_log_filename
+
 _logger = logging.getLogger(__name__)
 
 
@@ -81,8 +83,12 @@ def main():
         wanted_benchmarks = args.benchmarks.split(',')
         wanted_metrics = args.metrics.split(',')
         show = bool(args.show)
+        format = 'std'
+        if args.format is not None:
+            assert args.format in ['std', 'script']
+            format = args.format
 
-        compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show)
+        compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show, format)
 
     elif args.command == 'config':
         name = args.suite_name
@@ -174,4 +180,44 @@ if __name__ == "__main__":
     # compare_existing_logs(['./benchmarks/fritz/newton_galerkin/3D/mg_dynamic_iterations',
     #                        './benchmarks/fritz/newton_galerkin/3D/mg_dynamic_large'], ['NG_mg'], ['r_l2'], False)
 
+    # run(["./benchmarks/newton_galerkin/3D/symmetric/optimizations"], True)
+
+    # bcompare  --benchmarks=NG_mg --metrics=r_l2 --format=script
+    # compare_existing_logs(["./benchmarks/fritz/newton_galerkin/3D/symmetric/optimizations/cycle_type/mg_v_cycles",
+    #                        "./benchmarks/fritz/newton_galerkin/3D/symmetric/optimizations/cycle_type/mg_w_cycles/"],
+    #                       ['NG_mg'], ['r_l2'], False)
+
     main()
+
+#     biter = BenchmarkIterator(["./benchmarks/fritz/newton_galerkin/3D"])
+#
+#     for b in biter:
+#         prm = load_prm_file(b)
+#         repetitions = int(prm['BenchmarkMetaData']['repeat'])
+#
+#         for i in range(repetitions):
+#             run_log_path = os.path.join(b, build_run_log_filename(i))
+#             print("read " + run_log_path)
+#
+#             with open(run_log_path, 'a') as f:
+#                 f.write("""[0][INFO    ]------(0.011 sec) #benchmark[NG_mg]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_0]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_1]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_2]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_3]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_4]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_5]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_6]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_7]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_8]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_9]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_10]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_11]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_12]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_13]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_14]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_15]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_16]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_17]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_18]: r_l2, r_max, d_l2, d_max, time
+# [0][INFO    ]------(0.011 sec) #benchmark[NG_inner_mg_19]: r_l2, r_max, d_l2, d_max, time""")

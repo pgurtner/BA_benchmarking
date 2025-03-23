@@ -6,7 +6,7 @@ from src.utils import list_flatten
 from src.plot import Plot
 
 
-def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool):
+def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool, format: str = 'std'):
     extracted_benchmarks = map(lambda d: (d, extract_benchmarks(d)), dirs)
     restricted_benchmarks = map(lambda b: (b[0], restrict_benchmarks(b[1], benchmarks, metrics)), extracted_benchmarks)
     suites = map(lambda b: (os.path.basename(b[0]), b[1]), restricted_benchmarks)
@@ -33,7 +33,12 @@ def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[
 
     output_filepath = os.path.join(output_dir, "comparisons", output_file_name + '.pdf')
 
-    plot.save(output_filepath)
+    if format == 'std':
+        plot.save_and_close(output_filepath)
+    elif format == 'script':
+        script = plot.create_plot_script(output_filepath)
+        with open(output_filepath + '.py', 'w') as f:
+            f.write(script)
 
-    if show:
-        plot.show()
+    # if show:
+    #     plot.show()
