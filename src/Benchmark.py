@@ -35,7 +35,7 @@ class BenchmarkDeclaration:
 
     def __init__(self, name: str, metrics: list[MetricDeclaration]):
         if '.' in name or ' ' in name or ',' in name:
-            raise ValueError("benchmark names cannot contain dots, spaces and commas")
+            raise ValueError("benchmark names cannot contain dots, spaces and commas, found in " + name)
 
         self.name = name
         self.metrics = metrics

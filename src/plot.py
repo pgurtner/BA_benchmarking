@@ -39,6 +39,9 @@ class Plot:
                  axis_dims: tuple[int, int, float, float] = None,
                  axis_types: tuple[PlotAxisType, PlotAxisType] = (PlotAxisType.LINEAR,
                                                                   PlotAxisType.LOGARITHMIC)):
+        if len(graphs) == 0:
+            raise ValueError(f"plot {title} got empty graph list")
+        
         self.graphs = graphs
         self.title = title
         self.ylabel = ylabel
@@ -136,6 +139,7 @@ axes.plot(xpoints, ypoints{label}, marker=next(markers), color=next(colors))"""
         template = """
 import matplotlib.pyplot as plt
 import matplotlib.colors as mcolors
+from matplotlib.lines import Line2D
 
 plot = plt.figure()
 
