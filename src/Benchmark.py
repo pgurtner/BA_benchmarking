@@ -87,14 +87,41 @@ class Benchmark:
             _logger.warning(
                 f"Removed all measurements of {self.decl.name} after restricting to metrics {restricted_metrics}")
 
-    def to_graphs(self) -> list[Graph]:
+    def to_graphs(self, x_axis: str = "iterations", y_axis: list[str] | None = None) -> list[Graph]:
         if len(self.measurements) == 0:
             return []
 
+        def get_x_value(m: MetricsMeasurement) -> float:
+            if x_axis == "iterations":
+                return m.iteration
+
+            candidates = list(filter(lambda measurement: measurement[0] == x_axis, m.values))
+            assert len(candidates) == 1, "found duplicates in metric names: " + x_axis
+
+            return float(candidates[0][1])
+
+        def filter_y_values(m_values: list[tuple[str, str]]) -> list[tuple[str, str]]:
+            if y_axis is None:
+                return m_values
+
+            return list(filter(lambda m: m[0] in y_axis, m_values))
+
+        # measurements can be seen as a list of tuples that contain the different metrics
+        # for plotting we need a list for each metric containing the values
+        # gets a list of measurements for each metric and adds the different measurements from m to the corresponding metric list
+        def _fold_measurements(l: list[Graph], m: MetricsMeasurement) -> list[Graph]:
+            for value in filter_y_values(m.values):
+                for graph in l:
+                    if graph.label == value[0]:
+                        graph.points.append(Point2D(get_x_value(m), float(value[1])))
+                        break
+
+            return l
+
         first_measurement = self.measurements[0]
         # todo this could actually check the metric data type and cast value to int or float
-        graphs_start = [Graph(metric, [Point2D(first_measurement.iteration, float(value))]) for (metric, value) in
-                        first_measurement.values]
+        graphs_start = [Graph(metric, [Point2D(get_x_value(first_measurement), float(value))]) for (metric, value) in
+                        filter_y_values(first_measurement.values)]
         graphs = reduce(_fold_measurements, self.measurements[1:], graphs_start)
 
         for g in graphs:
@@ -116,16 +143,3 @@ def _restrict_measurement(m: MetricsMeasurement, restricted_metrics: list[str]):
     return list(
         filter(lambda value: value[0] in restricted_metrics,
                m.values))
-
-
-# measurements can be seen as a list of tuples that contain the different metrics
-# for plotting we need a list for each metric containing the values
-# gets a list of measurements for each metric and adds the different measurements from m to the corresponding metric list
-def _fold_measurements(l: list[Graph], m: MetricsMeasurement) -> list[Graph]:
-    for value in m.values:
-        for graph in l:
-            if graph.label == value[0]:
-                graph.points.append(Point2D(m.iteration, float(value[1])))
-                break
-
-    return l

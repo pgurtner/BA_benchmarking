@@ -2,15 +2,20 @@ import os
 from functools import reduce
 
 from src.extract import extract_benchmarks, restrict_benchmarks
-from src.utils import list_flatten
+from src.utils import list_flatten, BenchmarkIterator
 from src.plot import Plot
 
 
-def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool, format: str = 'std'):
-    extracted_benchmarks = map(lambda d: (d, extract_benchmarks(d)), dirs)
+def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[str], show: bool, format: str = 'std',
+                          x_axis: str = "iterations", y_axis: list[str] | None = None, x_axis_name: str | None = None,
+                          y_axis_name: str | None = None, plot_title: str | None = None) -> None:
+    b_iter = BenchmarkIterator(dirs)
+    extracted_benchmarks = map(lambda d: (d, extract_benchmarks(d)), b_iter)
     restricted_benchmarks = map(lambda b: (b[0], restrict_benchmarks(b[1], benchmarks, metrics)), extracted_benchmarks)
     suites = map(lambda b: (os.path.basename(b[0]), b[1]), restricted_benchmarks)
-    suites = list(map(lambda s: (s[0], list_flatten(list(map(lambda benchmark: benchmark.to_graphs(), s[1])))), suites))
+    suites = list(
+        map(lambda s: (s[0], list_flatten(list(map(lambda benchmark: benchmark.to_graphs(x_axis, y_axis), s[1])))),
+            suites))
 
     for suite_name, graphs in suites:
         for graph in graphs:
@@ -24,12 +29,21 @@ def compare_existing_logs(dirs: list[str], benchmarks: list[str], metrics: list[
         lambda s, b: f"{s},{b}", benchmarks)
     metrics_str = reduce(lambda s, m: f"{s},{m}",
                          metrics)
-    output_file_name = reduce(lambda s, f: f"{s}-vs-{f}", suite_names) + '.' + benchmark_str + '.' + metrics_str
-
-    plot = Plot(graphs, output_file_name, metrics_str)
+    # output_file_name = reduce(lambda s, f: f"{s}-vs-{f}", suite_names) + '.' + benchmark_str + '.' + metrics_str
 
     output_dir = os.path.commonpath(dirs)
     os.makedirs(os.path.join(output_dir, "comparisons"), exist_ok=True)
+
+    a = os.listdir(os.path.join(output_dir, "comparisons"))
+    output_file_name = str(len(a))
+
+    if plot_title is None:
+        plot_title = output_file_name
+
+    if y_axis_name is None:
+        y_axis_name = metrics_str
+
+    plot = Plot(graphs, plot_title, y_axis_name, x_axis_name)
 
     output_filepath = os.path.join(output_dir, "comparisons", output_file_name + '.pdf')
 

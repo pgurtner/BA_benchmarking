@@ -11,7 +11,7 @@ from src.move import move_benchmark_folders
 
 import logging
 
-#from src.utils import BenchmarkIterator, load_prm_file, build_run_log_filename
+from src.utils import BenchmarkIterator, load_prm_file, build_run_log_filename
 
 _logger = logging.getLogger(__name__)
 
@@ -88,7 +88,27 @@ def main():
             assert args.format in ['std', 'script']
             format = args.format
 
-        compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show, format)
+        x_axis = "iterations"
+        if args.x_axis is not None:
+            x_axis = args.x_axis
+        y_axis = None
+        if args.y_axis is not None:
+            y_axis = args.y_axis.split(',')
+
+        x_axis_label = None
+        if args.x_axis_label is not None:
+            x_axis_label = args.x_axis_label
+
+        y_axis_label = None
+        if args.y_axis_label is not None:
+            y_axis_label = args.y_axis_label
+
+        plot_title = None
+        if args.plot_title is not None:
+            plot_title = args.plot_title
+
+        compare_existing_logs(list(target_dirs), wanted_benchmarks, wanted_metrics, show, format, x_axis, y_axis,
+                              x_axis_label, y_axis_label, plot_title)
 
     elif args.command == 'config':
         name = args.suite_name
@@ -136,6 +156,12 @@ def add_common_plot_args(parser):
     parser.add_argument("--metrics", help="which metrics to plot")
     parser.add_argument("--format", help="output format, std | script", type=str)
     parser.add_argument("--show", help="whether to show the plot", action="store_true")
+
+    parser.add_argument("--x-axis", help="one of the chosen metrics or iterations by default", type=str)
+    parser.add_argument("--y-axis", help="subset of the chosen metrics or all by default", type=str)
+    parser.add_argument("--x-axis-label", type=str)
+    parser.add_argument("--y-axis-label", type=str)
+    parser.add_argument("--plot-title", type=str)
 
 
 def exec_plot_command(args):
@@ -189,10 +215,47 @@ if __name__ == "__main__":
 
     main()
 
-#     biter = BenchmarkIterator(["./benchmarks/fritz/newton_galerkin/3D"])
-#
-#     for b in biter:
-#         prm = load_prm_file(b)
+    # biter = BenchmarkIterator(["./benchmarks/newton_galerkin/3D/symmetric/optimizations"])
+
+    # for b in biter:
+    #     prm = load_prm_file(b)
+
+    #     assert prm["BenchmarkMetaData"]["tasks"] == "72", b
+    #     assert prm["BenchmarkMetaData"]["repeat"] == "5"
+    #     assert prm["BenchmarkMetaData"]["reduce"] == "avg"
+    #     assert prm["BenchmarkMetaData"]["binary"].startswith("/home/hpc/iwia/iwia123h")
+
+    #     assert prm["FritzMetaParameters"]["frequency"] == "2000000"
+    #     assert prm["FritzMetaParameters"]["pinThreads"] == "true"
+
+    #     assert prm["Parameters"]["minLevel"] == "2"
+    #     assert prm["Parameters"]["maxLevel"] == "6"
+    #     assert prm["Parameters"]["meshX"] == "2"
+    #     assert prm["Parameters"]["meshY"] == "2"
+    #     assert prm["Parameters"]["meshZ"] == "3"
+    #     assert prm["Parameters"]["maxNGIterations"] == "20"
+    #     assert prm["Parameters"]["initialGuessType"] in ["random", "constant"]
+    #     assert "initialGuessValue" in prm["Parameters"]
+    #     assert prm["Parameters"]["ngOperator"] in ["symmetric", "normal", "mass_lumped"]
+    #     assert prm["Parameters"]["solver"] in ["mg", "fmg"]
+    #     assert "preSmoothSteps" in prm["Parameters"]
+    #     assert "postSmoothSteps" in prm["Parameters"]
+    #     assert "smoothStepsIncreaseOnCoarserGrids" in prm["Parameters"]
+    #     assert prm["Parameters"]["cycleType"] in ["v", "w"]
+    #     assert prm["Parameters"]["mgMaxIter"] == "200"
+    #     assert prm["Parameters"]["mgToleranceType"] in ["constant", "linear", "quadratic"]
+    #     assert "mgToleranceValue" in prm["Parameters"]
+    #     assert prm["Parameters"]["mgInitialGuessType"] in ["random", "constant"]
+    #     assert prm["Parameters"]["smoother"] == "chebyshev"
+    #     assert prm["Parameters"]["chebyshevOrder"] in ["1", "2", "3", "4", "5"]
+    #     assert "chebyshevSpectralRadiusEstMaxIter" in prm["Parameters"]
+    #     assert prm["Parameters"]["coarseGridSolver"] in ["cg", "gmres"]
+    #     assert prm["Parameters"]["gmresMaxIter"] == "600"
+    #     assert prm["Parameters"]["gmresRestartLength"] == "40"
+    #     assert prm["Parameters"]["restriction"] == "linear"
+    #     assert prm["Parameters"]["prolongation"] == "linear"
+
+
 #         repetitions = int(prm['BenchmarkMetaData']['repeat'])
 #
 #         for i in range(repetitions):
